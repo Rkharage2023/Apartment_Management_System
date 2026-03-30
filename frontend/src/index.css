@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    @apply font-sans text-gray-900 bg-gray-50 antialiased;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  /* Smooth scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+}
+
+@layer components {
+  /* Reusable Tailwind component classes */
+  .btn-primary {
+    @apply px-4 py-2 bg-primary-600 text-white text-sm font-medium
+           rounded-lg hover:bg-primary-700 active:scale-95
+           transition-all duration-150 disabled:opacity-50;
+  }
+  .btn-outline {
+    @apply px-4 py-2 border border-gray-300 text-sm font-medium
+           rounded-lg hover:bg-gray-50 active:scale-95 transition-all;
+  }
+  .card {
+    @apply bg-white rounded-xl border border-gray-200 p-5;
+  }
+  .input-base {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg text-sm
+           focus:outline-none focus:ring-2 focus:ring-primary-500
+           focus:border-transparent transition-all;
+  }
+  .status-open {
+    @apply bg-blue-50   text-blue-700   text-xs px-2 py-0.5 rounded-full;
+  }
+  .status-progress {
+    @apply bg-amber-50  text-amber-700  text-xs px-2 py-0.5 rounded-full;
+  }
+  .status-resolved {
+    @apply bg-green-50  text-green-700  text-xs px-2 py-0.5 rounded-full;
+  }
+  .status-overdue {
+    @apply bg-red-50    text-red-700    text-xs px-2 py-0.5 rounded-full;
+  }
+  .status-paid {
+    @apply bg-green-50  text-green-700  text-xs px-2 py-0.5 rounded-full;
+  }
+  .status-pending {
+    @apply bg-gray-100  text-gray-600   text-xs px-2 py-0.5 rounded-full;
+  }
+}
