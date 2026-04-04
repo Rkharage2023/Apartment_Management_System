@@ -362,6 +362,7 @@ const Societies = () => {
               </div>
             </form>
           </div>
+          
         </div>
       )}
     </DashboardLayout>
