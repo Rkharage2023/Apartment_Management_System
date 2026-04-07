@@ -15,6 +15,7 @@ import {
   FaSignOutAlt,
   FaTimes,
   FaCity,
+  FaUsers,
 } from "react-icons/fa";
 
 // Admin nav links
@@ -33,6 +34,7 @@ const adminLinks = [
   { to: "/admin/parking", label: "Parking", icon: <FaCar /> },
   { to: "/admin/events", label: "Events", icon: <FaCalendarAlt /> },
   { to: "/admin/waste", label: "Waste", icon: <FaTrash /> },
+  { to: "/admin/users", label: "Users", icon: <FaUsers /> },
 ];
 
 // Resident nav links

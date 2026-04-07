@@ -15,6 +15,7 @@ import visitorRoutes from "./routes/visitorRoutes.js";
 import parkingRoutes from "./routes/parkingRoutes.js";
 import eventRoutes from "./routes/eventRoutes.js";
 import wasteRoutes from "./routes/wasteRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 
 // Error Middleware
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
@@ -45,6 +46,7 @@ app.use("/api/v1/visitors", visitorRoutes);
 app.use("/api/v1/parking", parkingRoutes);
 app.use("/api/v1/events", eventRoutes);
 app.use("/api/v1/waste", wasteRoutes);
+app.use("/api/v1/users", userRoutes);
 
 // Error Middleware — must be LAST
 app.use(notFound);

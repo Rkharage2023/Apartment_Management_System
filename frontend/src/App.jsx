@@ -1,4 +1,5 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import PrivateRoute from "./components/common/PrivateRoute";
@@ -23,10 +24,23 @@ import MyBills from "./pages/resident/MyBills";
 import MyComplaints from "./pages/resident/MyComplaints";
 import MyVisitors from "./pages/resident/MyVisitors";
 import MyParking from "./pages/resident/MyParking";
+import Users from "./pages/admin/Users";
+
+// Root redirect based on role
+const RootRedirect = () => {
+  const { user } = useSelector((state) => state.auth);
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === "admin") return <Navigate to="/admin" replace />;
+  if (user.role === "resident") return <Navigate to="/resident" replace />;
+  return <Navigate to="/login" replace />;
+};
 
 function App() {
   return (
     <Routes>
+      {/* Root → smart redirect */}
+      <Route path="/" element={<RootRedirect />} />
+
       {/* Public Routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
@@ -43,6 +57,7 @@ function App() {
         <Route path="parking" element={<Parking />} />
         <Route path="events" element={<Events />} />
         <Route path="waste" element={<Waste />} />
+        <Route path="users" element={<Users />} />
       </Route>
 
       {/* Resident Routes */}
