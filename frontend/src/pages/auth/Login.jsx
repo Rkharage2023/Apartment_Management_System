@@ -21,9 +21,9 @@ const Login = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      if (user.role === "admin") navigate(`${API_URL}/admin`);
-      else if (user.role === "resident") navigate(`${API_URL}/resident`);
-      else navigate(`${API_URL}/login`);
+      if (user.role === "admin") navigate(`/admin`);
+      else if (user.role === "resident") navigate(`/resident`);
+      else navigate(`/login`);
     }
   }, [user, navigate]);
 
