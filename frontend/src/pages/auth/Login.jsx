@@ -5,6 +5,8 @@ import { loginUser, clearError } from "../../features/auth/authSlice";
 import toast from "react-hot-toast";
 import { FaEye, FaEyeSlash, FaBuilding } from "react-icons/fa";
 
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -19,9 +21,9 @@ const Login = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      if (user.role === "admin") navigate("/admin");
-      else if (user.role === "resident") navigate("/resident");
-      else navigate("/login");
+      if (user.role === "admin") navigate(`${API_URL}/admin`);
+      else if (user.role === "resident") navigate(`${API_URL}/resident`);
+      else navigate(`${API_URL}/login`);
     }
   }, [user, navigate]);
 

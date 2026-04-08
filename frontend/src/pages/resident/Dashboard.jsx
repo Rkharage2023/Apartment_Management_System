@@ -3,6 +3,9 @@ import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
 import { useSelector } from "react-redux";
 import API from "../../api/axios";
+
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 import {
   FaBuilding,
   FaMoneyBill,
@@ -38,12 +41,12 @@ const ResidentDashboard = () => {
           eventsRes,
           parkingRes,
         ] = await Promise.allSettled([
-          API.get("/flats/my-flat"),
-          API.get("/billing/my-bills"),
-          API.get("/complaints/my-complaints"),
-          API.get("/visitors/my-visitors"),
-          API.get("/notices"),
-          API.get("/events"),
+          API.get(`${API_URL}/flats/my-flat`),
+          API.get(`${API_URL}/billing/my-bills`),
+          API.get(`${API_URL}/complaints/my-complaints`),
+          API.get(`${API_URL}/visitors/my-visitors`),
+          API.get(`${API_URL}/notices`),
+          API.get(`${API_URL}/events`),
           API.get("/parking/my-slot"),
         ]);
 

@@ -4,6 +4,8 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaEdit, FaTrash, FaCity } from "react-icons/fa";
 
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 const Societies = () => {
   const [societies, setSocieties] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -23,7 +25,7 @@ const Societies = () => {
   const fetchSocieties = async () => {
     try {
       setLoading(true);
-      const res = await API.get("/societies");
+      const res = await API.get(`${API_URL}/societies`);
       setSocieties(res.data.societies);
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to fetch societies");
@@ -98,10 +100,10 @@ const Societies = () => {
 
     try {
       if (editData) {
-        await API.put(`/societies/${editData._id}`, payload);
+        await API.put(`${API_URL}/societies/${editData._id}`, payload);
         toast.success("Society updated successfully");
       } else {
-        await API.post("/societies", payload);
+        await API.post(`${API_URL}/societies`, payload);
         toast.success("Society created successfully");
       }
       setShowModal(false);
@@ -116,7 +118,7 @@ const Societies = () => {
     if (!window.confirm("Are you sure you want to delete this society?"))
       return;
     try {
-      await API.delete(`/societies/${id}`);
+      await API.delete(`${API_URL}/societies/${id}`);
       toast.success("Society deleted successfully");
       fetchSocieties();
     } catch (error) {
@@ -362,7 +364,6 @@ const Societies = () => {
               </div>
             </form>
           </div>
-          
         </div>
       )}
     </DashboardLayout>

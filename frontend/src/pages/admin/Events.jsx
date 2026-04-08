@@ -4,6 +4,8 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaCalendarAlt, FaEdit, FaTrash } from "react-icons/fa";
 
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 const Events = () => {
   const [events, setEvents] = useState([]);
   const [societies, setSocieties] = useState([]);
@@ -26,7 +28,7 @@ const Events = () => {
   const fetchEvents = async () => {
     try {
       setLoading(true);
-      const res = await API.get("/events");
+      const res = await API.get(`${API_URL}/events`);
       setEvents(res.data.events);
     } catch (error) {
       toast.error("Failed to fetch events");
@@ -37,7 +39,7 @@ const Events = () => {
 
   const fetchSocieties = async () => {
     try {
-      const res = await API.get("/societies");
+      const res = await API.get(`${API_URL}/societies`);
       setSocieties(res.data.societies);
     } catch (error) {}
   };
@@ -97,10 +99,10 @@ const Events = () => {
     }
     try {
       if (editData) {
-        await API.put(`/events/${editData._id}`, formData);
+        await API.put(`${API_URL}/events/${editData._id}`, formData);
         toast.success("Event updated");
       } else {
-        await API.post("/events", {
+        await API.post(`${API_URL}/events`, {
           ...formData,
           maxAttendees: Number(formData.maxAttendees),
         });
@@ -116,7 +118,7 @@ const Events = () => {
 
   const handleStatusUpdate = async (id, status) => {
     try {
-      await API.put(`/events/${id}/status`, { status });
+      await API.put(`${API_URL}/events/${id}/status`, { status });
       toast.success(`Event marked as ${status}`);
       fetchEvents();
     } catch (error) {
@@ -127,7 +129,7 @@ const Events = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this event?")) return;
     try {
-      await API.delete(`/events/${id}`);
+      await API.delete(`${API_URL}/events/${id}`);
       toast.success("Event deleted");
       fetchEvents();
     } catch (error) {

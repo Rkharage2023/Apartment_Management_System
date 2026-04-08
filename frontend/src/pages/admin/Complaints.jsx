@@ -4,6 +4,8 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaExclamationCircle } from "react-icons/fa";
 
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 const Complaints = () => {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -19,7 +21,7 @@ const Complaints = () => {
       let query = "?";
       if (filterStatus) query += `status=${filterStatus}&`;
       if (filterPriority) query += `priority=${filterPriority}`;
-      const res = await API.get(`/complaints${query}`);
+      const res = await API.get(`${API_URL}/complaints${query}`);
       setComplaints(res.data.complaints);
     } catch (error) {
       toast.error("Failed to fetch complaints");
@@ -34,7 +36,7 @@ const Complaints = () => {
 
   const handleStatusUpdate = async (id, status) => {
     try {
-      await API.put(`/complaints/${id}/status`, { status });
+      await API.put(`${API_URL}/complaints/${id}/status`, { status });
       toast.success(`Complaint marked as ${status}`);
       fetchComplaints();
       setShowDetailModal(false);
@@ -46,7 +48,7 @@ const Complaints = () => {
   const handleAddComment = async (id) => {
     if (!comment.trim()) return;
     try {
-      await API.put(`/complaints/${id}/comment`, { comment });
+      await API.put(`${API_URL}/complaints/${id}/comment`, { comment });
       toast.success("Comment added");
       setComment("");
     } catch (error) {

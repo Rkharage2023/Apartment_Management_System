@@ -4,6 +4,8 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaBullhorn, FaEdit, FaTrash } from "react-icons/fa";
 
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 const Notices = () => {
   const [notices, setNotices] = useState([]);
   const [societies, setSocieties] = useState([]);
@@ -22,7 +24,7 @@ const Notices = () => {
   const fetchNotices = async () => {
     try {
       setLoading(true);
-      const res = await API.get("/notices");
+      const res = await API.get(`${API_URL}/notices`);
       setNotices(res.data.notices);
     } catch (error) {
       toast.error("Failed to fetch notices");
@@ -33,7 +35,7 @@ const Notices = () => {
 
   const fetchSocieties = async () => {
     try {
-      const res = await API.get("/societies");
+      const res = await API.get(`${API_URL}/societies`);
       setSocieties(res.data.societies);
     } catch (error) {}
   };
@@ -82,10 +84,10 @@ const Notices = () => {
     }
     try {
       if (editData) {
-        await API.put(`/notices/${editData._id}`, formData);
+        await API.put(`${API_URL}/notices/${editData._id}`, formData);
         toast.success("Notice updated");
       } else {
-        await API.post("/notices", formData);
+        await API.post(`${API_URL}/notices`, formData);
         toast.success("Notice created");
       }
       setShowModal(false);
@@ -99,7 +101,7 @@ const Notices = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this notice?")) return;
     try {
-      await API.delete(`/notices/${id}`);
+      await API.delete(`${API_URL}/notices/${id}`);
       toast.success("Notice deleted");
       fetchNotices();
     } catch (error) {

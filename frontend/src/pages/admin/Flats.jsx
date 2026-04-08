@@ -10,6 +10,8 @@ import {
   FaUserPlus,
 } from "react-icons/fa";
 
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 const Flats = () => {
   const [flats, setFlats] = useState([]);
   const [societies, setSocieties] = useState([]);
@@ -37,7 +39,7 @@ const Flats = () => {
     try {
       setLoading(true);
       const query = filterStatus ? `?status=${filterStatus}` : "";
-      const res = await API.get(`/flats${query}`);
+      const res = await API.get(`${API_URL}/flats${query}`);
       setFlats(res.data.flats);
     } catch (error) {
       toast.error("Failed to fetch flats");
@@ -48,7 +50,7 @@ const Flats = () => {
 
   const fetchSocieties = async () => {
     try {
-      const res = await API.get("/societies");
+      const res = await API.get(`${API_URL}/societies`);
       setSocieties(res.data.societies);
     } catch (error) {}
   };
@@ -82,7 +84,7 @@ const Flats = () => {
       return;
     }
     try {
-      await API.post("/flats", {
+      await API.post(`${API_URL}/flats`, {
         ...formData,
         floor: Number(formData.floor),
         monthlyRent: Number(formData.monthlyRent),
@@ -100,7 +102,7 @@ const Flats = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this flat?")) return;
     try {
-      await API.delete(`/flats/${id}`);
+      await API.delete(`${API_URL}/flats/${id}`);
       toast.success("Flat deleted");
       fetchFlats();
     } catch (error) {
@@ -115,7 +117,7 @@ const Flats = () => {
       return;
     }
     try {
-      await API.put(`/flats/${selectedFlat._id}/assign`, assignData);
+      await API.put(`${API_URL}/flats/${selectedFlat._id}/assign`, assignData);
       toast.success("User assigned successfully");
       setShowAssignModal(false);
       fetchFlats();

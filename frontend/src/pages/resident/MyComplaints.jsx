@@ -4,6 +4,8 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaExclamationCircle } from "react-icons/fa";
 
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 const MyComplaints = () => {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -32,7 +34,7 @@ const MyComplaints = () => {
     try {
       setLoading(true);
       const query = filterStatus ? `?status=${filterStatus}` : "";
-      const res = await API.get(`/complaints/my-complaints${query}`);
+      const res = await API.get(`${API_URL}/complaints/my-complaints${query}`);
       setComplaints(res.data.complaints);
     } catch (error) {
       toast.error("Failed to fetch complaints");
@@ -44,8 +46,10 @@ const MyComplaints = () => {
   const fetchSocietiesAndFlats = async () => {
     try {
       const [sRes, fRes] = await Promise.all([
-        API.get("/societies"),
-        API.get("/flats/my-flat").catch(() => ({ data: { flat: null } })),
+        API.get(`${API_URL}/societies`),
+        API.get(`${API_URL}/flats/my-flat`).catch(() => ({
+          data: { flat: null },
+        })),
       ]);
       setSocieties(sRes.data.societies);
       if (fRes.data.flat) {
@@ -76,7 +80,7 @@ const MyComplaints = () => {
       return;
     }
     try {
-      await API.post("/complaints", formData);
+      await API.post(`${API_URL}/complaints`, formData);
       toast.success("Complaint raised successfully");
       setShowModal(false);
       setFormData((prev) => ({
@@ -96,7 +100,7 @@ const MyComplaints = () => {
     e.preventDefault();
     try {
       await API.put(
-        `/complaints/${selectedComplaint._id}/feedback`,
+        `${API_URL}/complaints/${selectedComplaint._id}/feedback`,
         feedbackData,
       );
       toast.success("Feedback submitted successfully");

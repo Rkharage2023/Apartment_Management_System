@@ -10,6 +10,8 @@ import {
   FaSwimmingPool,
 } from "react-icons/fa";
 
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 const MyFlat = () => {
   const [flat, setFlat] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -17,7 +19,7 @@ const MyFlat = () => {
   const fetchMyFlat = async () => {
     try {
       setLoading(true);
-      const res = await API.get("/flats/my-flat");
+      const res = await API.get(`${API_URL}/flats/my-flat`);
       setFlat(res.data.flat);
     } catch (error) {
       toast.error(

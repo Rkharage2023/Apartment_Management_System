@@ -4,6 +4,8 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaCar, FaBolt } from "react-icons/fa";
 
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 const MyParking = () => {
   const [slot, setSlot] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -11,7 +13,7 @@ const MyParking = () => {
   const fetchMySlot = async () => {
     try {
       setLoading(true);
-      const res = await API.get("/parking/my-slot");
+      const res = await API.get(`${API_URL}/parking/my-slot`);
       setSlot(res.data.slot);
     } catch (error) {
       if (error.response?.status !== 404) {

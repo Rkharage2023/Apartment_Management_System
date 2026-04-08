@@ -9,6 +9,8 @@ import {
   FaExclamationTriangle,
 } from "react-icons/fa";
 
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 const MyBills = () => {
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -27,7 +29,7 @@ const MyBills = () => {
       let query = "?";
       if (filterStatus) query += `status=${filterStatus}&`;
       if (filterMonth) query += `month=${filterMonth}`;
-      const res = await API.get(`/billing/my-bills${query}`);
+      const res = await API.get(`${API_URL}/billing/my-bills${query}`);
       const fetchedBills = res.data.bills;
       setBills(fetchedBills);
 

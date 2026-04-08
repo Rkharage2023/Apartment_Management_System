@@ -4,6 +4,8 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaCar } from "react-icons/fa";
 
+const API_URL = "https://apartment-backend.onrender.com/api/v1";
+
 const Parking = () => {
   const [slots, setSlots] = useState([]);
   const [societies, setSocieties] = useState([]);
@@ -36,7 +38,7 @@ const Parking = () => {
       let query = "?";
       if (filterStatus) query += `status=${filterStatus}&`;
       if (filterType) query += `slotType=${filterType}`;
-      const res = await API.get(`/parking${query}`);
+      const res = await API.get(`${API_URL}/parking${query}`);
       setSlots(res.data.slots);
     } catch (error) {
       toast.error("Failed to fetch slots");
@@ -47,7 +49,7 @@ const Parking = () => {
 
   const fetchSocieties = async () => {
     try {
-      const res = await API.get("/societies");
+      const res = await API.get(`${API_URL}/societies`);
       setSocieties(res.data.societies);
     } catch (error) {}
   };
@@ -64,7 +66,7 @@ const Parking = () => {
       return;
     }
     try {
-      await API.post("/parking", {
+      await API.post(`${API_URL}/parking`, {
         ...formData,
         monthlyCharge: Number(formData.monthlyCharge),
       });
@@ -83,7 +85,10 @@ const Parking = () => {
       return;
     }
     try {
-      await API.put(`/parking/${selectedSlot._id}/assign`, assignData);
+      await API.put(
+        `${API_URL}/parking/${selectedSlot._id}/assign`,
+        assignData,
+      );
       toast.success("Slot assigned successfully");
       setShowAssignModal(false);
       fetchSlots();
@@ -95,7 +100,7 @@ const Parking = () => {
   const handleUnassign = async (id) => {
     if (!window.confirm("Unassign this slot?")) return;
     try {
-      await API.put(`/parking/${id}/unassign`);
+      await API.put(`${API_URL}/parking/${id}/unassign`);
       toast.success("Slot unassigned");
       fetchSlots();
     } catch (error) {
@@ -106,7 +111,7 @@ const Parking = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this slot?")) return;
     try {
-      await API.delete(`/parking/${id}`);
+      await API.delete(`${API_URL}/parking/${id}`);
       toast.success("Slot deleted");
       fetchSlots();
     } catch (error) {
