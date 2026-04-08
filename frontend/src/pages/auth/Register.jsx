@@ -25,8 +25,8 @@ const Register = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      if (user.role === "admin") navigate(`${API_URL}/admin`);
-      else navigate(`${API_URL}/resident`);
+      if (user.role === "admin") navigate(`/admin`);
+      else navigate(`/resident`);
     }
   }, [user, navigate]);
 
