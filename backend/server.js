@@ -43,10 +43,10 @@ app.use(
     credentials: true,
   }),
 );
+app.options("*", cors());
 
 // Security & Parsing
 app.use(helmet());
-app.use(cors());
 app.use(express.json());
 
 // Health Check

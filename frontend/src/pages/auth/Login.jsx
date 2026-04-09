@@ -5,8 +5,6 @@ import { loginUser, clearError } from "../../features/auth/authSlice";
 import toast from "react-hot-toast";
 import { FaEye, FaEyeSlash, FaBuilding } from "react-icons/fa";
 
-// ✅ No API_URL here — axios.js handles it
-
 const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
