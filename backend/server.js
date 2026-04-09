@@ -43,7 +43,6 @@ app.use(
     credentials: true,
   }),
 );
-app.use(cors({...}));
 app.options("*", cors());
 
 // Security & Parsing
