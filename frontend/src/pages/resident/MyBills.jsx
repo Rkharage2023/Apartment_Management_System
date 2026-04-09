@@ -29,7 +29,7 @@ const MyBills = () => {
       let query = "?";
       if (filterStatus) query += `status=${filterStatus}&`;
       if (filterMonth) query += `month=${filterMonth}`;
-      const res = await API.get(`${API_URL}/billing/my-bills${query}`);
+      const res = await API.get(`/billing/my-bills${query}`);
       const fetchedBills = res.data.bills;
       setBills(fetchedBills);
 

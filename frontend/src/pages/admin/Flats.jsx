@@ -39,7 +39,7 @@ const Flats = () => {
     try {
       setLoading(true);
       const query = filterStatus ? `?status=${filterStatus}` : "";
-      const res = await API.get(`${API_URL}/flats${query}`);
+      const res = await API.get(`/flats${query}`);
       setFlats(res.data.flats);
     } catch (error) {
       toast.error("Failed to fetch flats");
@@ -50,7 +50,7 @@ const Flats = () => {
 
   const fetchSocieties = async () => {
     try {
-      const res = await API.get(`${API_URL}/societies`);
+      const res = await API.get(`/societies`);
       setSocieties(res.data.societies);
     } catch (error) {}
   };
@@ -84,7 +84,7 @@ const Flats = () => {
       return;
     }
     try {
-      await API.post(`${API_URL}/flats`, {
+      await API.post(`/flats`, {
         ...formData,
         floor: Number(formData.floor),
         monthlyRent: Number(formData.monthlyRent),
@@ -102,7 +102,7 @@ const Flats = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this flat?")) return;
     try {
-      await API.delete(`${API_URL}/flats/${id}`);
+      await API.delete(`/flats/${id}`);
       toast.success("Flat deleted");
       fetchFlats();
     } catch (error) {
@@ -117,7 +117,7 @@ const Flats = () => {
       return;
     }
     try {
-      await API.put(`${API_URL}/flats/${selectedFlat._id}/assign`, assignData);
+      await API.put(`/flats/${selectedFlat._id}/assign`, assignData);
       toast.success("User assigned successfully");
       setShowAssignModal(false);
       fetchFlats();

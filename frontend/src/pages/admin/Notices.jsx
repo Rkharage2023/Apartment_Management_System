@@ -24,7 +24,7 @@ const Notices = () => {
   const fetchNotices = async () => {
     try {
       setLoading(true);
-      const res = await API.get(`${API_URL}/notices`);
+      const res = await API.get(`/notices`);
       setNotices(res.data.notices);
     } catch (error) {
       toast.error("Failed to fetch notices");
@@ -35,7 +35,7 @@ const Notices = () => {
 
   const fetchSocieties = async () => {
     try {
-      const res = await API.get(`${API_URL}/societies`);
+      const res = await API.get(`/societies`);
       setSocieties(res.data.societies);
     } catch (error) {}
   };
@@ -84,10 +84,10 @@ const Notices = () => {
     }
     try {
       if (editData) {
-        await API.put(`${API_URL}/notices/${editData._id}`, formData);
+        await API.put(`/notices/${editData._id}`, formData);
         toast.success("Notice updated");
       } else {
-        await API.post(`${API_URL}/notices`, formData);
+        await API.post(`/notices`, formData);
         toast.success("Notice created");
       }
       setShowModal(false);
@@ -101,7 +101,7 @@ const Notices = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this notice?")) return;
     try {
-      await API.delete(`${API_URL}/notices/${id}`);
+      await API.delete(`/notices/${id}`);
       toast.success("Notice deleted");
       fetchNotices();
     } catch (error) {

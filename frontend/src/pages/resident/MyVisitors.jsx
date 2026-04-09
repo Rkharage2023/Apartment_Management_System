@@ -25,7 +25,7 @@ const MyVisitors = () => {
   const fetchVisitors = async () => {
     try {
       setLoading(true);
-      const res = await API.get(`${API_URL}/visitors/my-visitors`);
+      const res = await API.get(`/visitors/my-visitors`);
       setVisitors(res.data.visitors);
     } catch (error) {
       toast.error("Failed to fetch visitors");
@@ -36,7 +36,7 @@ const MyVisitors = () => {
 
   const fetchMyFlat = async () => {
     try {
-      const res = await API.get(`${API_URL}/flats/my-flat`);
+      const res = await API.get(`/flats/my-flat`);
       const flat = res.data.flat;
       setMyFlat(flat);
       setFormData((prev) => ({
@@ -59,7 +59,7 @@ const MyVisitors = () => {
       return;
     }
     try {
-      await API.post(`${API_URL}/visitors`, formData);
+      await API.post(`/visitors`, formData);
       toast.success("Visitor pre-approved successfully");
       setShowModal(false);
       setFormData((prev) => ({

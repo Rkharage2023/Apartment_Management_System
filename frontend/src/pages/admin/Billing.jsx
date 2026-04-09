@@ -39,7 +39,7 @@ const Billing = () => {
       let query = "?";
       if (filterStatus) query += `status=${filterStatus}&`;
       if (filterMonth) query += `month=${filterMonth}`;
-      const res = await API.get(`${API_URL}/billing${query}`);
+      const res = await API.get(`/billing${query}`);
       setBills(res.data.bills);
     } catch (error) {
       toast.error("Failed to fetch bills");
@@ -50,7 +50,7 @@ const Billing = () => {
 
   const fetchSocieties = async () => {
     try {
-      const res = await API.get(`${API_URL}/societies`);
+      const res = await API.get(`/societies`);
       setSocieties(res.data.societies);
     } catch (error) {}
   };
@@ -72,7 +72,7 @@ const Billing = () => {
       return;
     }
     try {
-      await API.post(`${API_URL}/billing`, {
+      await API.post(`/billing`, {
         ...formData,
         amount: Number(formData.amount),
       });
@@ -91,7 +91,7 @@ const Billing = () => {
       return;
     }
     try {
-      const res = await API.post(`${API_URL}/billing/generate-bulk`, bulkData);
+      const res = await API.post(`/billing/generate-bulk`, bulkData);
       toast.success(res.data.message);
       setShowBulkModal(false);
       fetchBills();
@@ -103,7 +103,7 @@ const Billing = () => {
   const handlePayCash = async (id) => {
     if (!window.confirm("Mark this bill as paid via cash?")) return;
     try {
-      await API.put(`${API_URL}/billing/${id}/pay-cash`);
+      await API.put(`/billing/${id}/pay-cash`);
       toast.success("Bill marked as paid");
       fetchBills();
     } catch (error) {
@@ -114,7 +114,7 @@ const Billing = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this bill?")) return;
     try {
-      await API.delete(`${API_URL}/billing/${id}`);
+      await API.delete(`/billing/${id}`);
       toast.success("Bill deleted");
       fetchBills();
     } catch (error) {

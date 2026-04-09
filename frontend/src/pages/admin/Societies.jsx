@@ -25,7 +25,7 @@ const Societies = () => {
   const fetchSocieties = async () => {
     try {
       setLoading(true);
-      const res = await API.get(`${API_URL}/societies`);
+      const res = await API.get(`/societies`);
       setSocieties(res.data.societies);
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to fetch societies");
@@ -100,10 +100,10 @@ const Societies = () => {
 
     try {
       if (editData) {
-        await API.put(`${API_URL}/societies/${editData._id}`, payload);
+        await API.put(`/societies/${editData._id}`, payload);
         toast.success("Society updated successfully");
       } else {
-        await API.post(`${API_URL}/societies`, payload);
+        await API.post(`/societies`, payload);
         toast.success("Society created successfully");
       }
       setShowModal(false);
@@ -118,7 +118,7 @@ const Societies = () => {
     if (!window.confirm("Are you sure you want to delete this society?"))
       return;
     try {
-      await API.delete(`${API_URL}/societies/${id}`);
+      await API.delete(`/societies/${id}`);
       toast.success("Society deleted successfully");
       fetchSocieties();
     } catch (error) {

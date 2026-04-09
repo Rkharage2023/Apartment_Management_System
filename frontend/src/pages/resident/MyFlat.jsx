@@ -19,7 +19,7 @@ const MyFlat = () => {
   const fetchMyFlat = async () => {
     try {
       setLoading(true);
-      const res = await API.get(`${API_URL}/flats/my-flat`);
+      const res = await API.get(`/flats/my-flat`);
       setFlat(res.data.flat);
     } catch (error) {
       toast.error(

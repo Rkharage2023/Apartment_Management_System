@@ -15,7 +15,7 @@ const Users = () => {
     try {
       setLoading(true);
       const query = filterRole ? `?role=${filterRole}` : "";
-      const res = await API.get(`${API_URL}/users${query}`);
+      const res = await API.get(`/users${query}`);
       setUsers(res.data.users);
     } catch (error) {
       toast.error("Failed to fetch users");
@@ -30,7 +30,7 @@ const Users = () => {
 
   const handleRoleChange = async (id, role) => {
     try {
-      await API.put(`${API_URL}/users/${id}/role`, { role });
+      await API.put(`/users/${id}/role`, { role });
       toast.success("Role updated successfully");
       fetchUsers();
     } catch (error) {
@@ -41,7 +41,7 @@ const Users = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this user?")) return;
     try {
-      await API.delete(`${API_URL}/users/${id}`);
+      await API.delete(`/users/${id}`);
       toast.success("User deleted");
       fetchUsers();
     } catch (error) {

@@ -34,7 +34,7 @@ const MyComplaints = () => {
     try {
       setLoading(true);
       const query = filterStatus ? `?status=${filterStatus}` : "";
-      const res = await API.get(`${API_URL}/complaints/my-complaints${query}`);
+      const res = await API.get(`/complaints/my-complaints${query}`);
       setComplaints(res.data.complaints);
     } catch (error) {
       toast.error("Failed to fetch complaints");
@@ -46,8 +46,8 @@ const MyComplaints = () => {
   const fetchSocietiesAndFlats = async () => {
     try {
       const [sRes, fRes] = await Promise.all([
-        API.get(`${API_URL}/societies`),
-        API.get(`${API_URL}/flats/my-flat`).catch(() => ({
+        API.get(`/societies`),
+        API.get(`/flats/my-flat`).catch(() => ({
           data: { flat: null },
         })),
       ]);
@@ -80,7 +80,7 @@ const MyComplaints = () => {
       return;
     }
     try {
-      await API.post(`${API_URL}/complaints`, formData);
+      await API.post(`/complaints`, formData);
       toast.success("Complaint raised successfully");
       setShowModal(false);
       setFormData((prev) => ({
@@ -100,7 +100,7 @@ const MyComplaints = () => {
     e.preventDefault();
     try {
       await API.put(
-        `${API_URL}/complaints/${selectedComplaint._id}/feedback`,
+        `/complaints/${selectedComplaint._id}/feedback`,
         feedbackData,
       );
       toast.success("Feedback submitted successfully");

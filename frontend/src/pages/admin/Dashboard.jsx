@@ -62,16 +62,16 @@ const AdminDashboard = () => {
         noticesRes,
         wasteRes,
       ] = await Promise.allSettled([
-        API.get(`${API_URL}/flats`),
-        API.get(`${API_URL}/societies`),
-        API.get(`${API_URL}/billing`),
-        API.get(`${API_URL}/complaints`),
-        API.get(`${API_URL}/visitors`),
-        API.get(`${API_URL}/parking`),
-        API.get(`${API_URL}/events?status=upcoming`),
-        API.get(`${API_URL}/notices`),
+        API.get(`/flats`),
+        API.get(`/societies`),
+        API.get(`/billing`),
+        API.get(`/complaints`),
+        API.get(`/visitors`),
+        API.get(`/parking`),
+        API.get(`/events?status=upcoming`),
+        API.get(`/notices`),
         API.get(
-          `${API_URL}/waste/analytics?` +
+          `/waste/analytics?` +
             (societiesRes?.value?.data?.societies?.[0]?._id
               ? `society=${societiesRes.value.data.societies[0]._id}`
               : "society=none"),
@@ -191,7 +191,7 @@ const AdminDashboard = () => {
     try {
       const today = new Date().toISOString().split("T")[0];
       const res = await API.get(
-        `${API_URL}/waste/analytics?society=${societyId}&date=${today}`,
+        `/waste/analytics?society=${societyId}&date=${today}`,
       );
       setStats((prev) => ({
         ...prev,
@@ -214,14 +214,14 @@ const AdminDashboard = () => {
           eventsRes,
           noticesRes,
         ] = await Promise.allSettled([
-          API.get(`${API_URL}/flats`),
-          API.get(`${API_URL}/societies`),
-          API.get(`${API_URL}/billing`),
-          API.get(`${API_URL}/complaints`),
-          API.get(`${API_URL}/visitors`),
-          API.get(`${API_URL}/parking`),
-          API.get(`${API_URL}/events`),
-          API.get(`${API_URL}/notices`),
+          API.get(`/flats`),
+          API.get(`/societies`),
+          API.get(`/billing`),
+          API.get(`/complaints`),
+          API.get(`/visitors`),
+          API.get(`/parking`),
+          API.get(`/events`),
+          API.get(`/notices`),
         ]);
 
         const newStats = { ...stats };

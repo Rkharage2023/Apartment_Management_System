@@ -41,12 +41,12 @@ const ResidentDashboard = () => {
           eventsRes,
           parkingRes,
         ] = await Promise.allSettled([
-          API.get(`${API_URL}/flats/my-flat`),
-          API.get(`${API_URL}/billing/my-bills`),
-          API.get(`${API_URL}/complaints/my-complaints`),
-          API.get(`${API_URL}/visitors/my-visitors`),
-          API.get(`${API_URL}/notices`),
-          API.get(`${API_URL}/events`),
+          API.get(`/flats/my-flat`),
+          API.get(`/billing/my-bills`),
+          API.get(`/complaints/my-complaints`),
+          API.get(`/visitors/my-visitors`),
+          API.get(`/notices`),
+          API.get(`/events`),
           API.get("/parking/my-slot"),
         ]);
 

@@ -13,7 +13,7 @@ const MyParking = () => {
   const fetchMySlot = async () => {
     try {
       setLoading(true);
-      const res = await API.get(`${API_URL}/parking/my-slot`);
+      const res = await API.get(`/parking/my-slot`);
       setSlot(res.data.slot);
     } catch (error) {
       if (error.response?.status !== 404) {

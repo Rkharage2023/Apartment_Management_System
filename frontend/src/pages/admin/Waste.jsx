@@ -26,7 +26,7 @@ const Waste = () => {
       let query = "?";
       if (filterStatus) query += `status=${filterStatus}&`;
       if (filterDate) query += `date=${filterDate}`;
-      const res = await API.get(`${API_URL}/waste${query}`);
+      const res = await API.get(`/waste${query}`);
       setLogs(res.data.logs);
     } catch (error) {
       toast.error("Failed to fetch waste logs");
@@ -40,14 +40,14 @@ const Waste = () => {
     try {
       let query = `?society=${societyId}`;
       if (date) query += `&date=${date}`;
-      const res = await API.get(`${API_URL}/waste/analytics${query}`);
+      const res = await API.get(`/waste/analytics${query}`);
       setAnalytics(res.data);
     } catch (error) {}
   };
 
   const fetchSocieties = async () => {
     try {
-      const res = await API.get(`${API_URL}/societies`);
+      const res = await API.get(`/societies`);
       setSocieties(res.data.societies);
     } catch (error) {}
   };
@@ -64,7 +64,7 @@ const Waste = () => {
       return;
     }
     try {
-      const res = await API.post(`${API_URL}/waste`, formData);
+      const res = await API.post(`/waste`, formData);
       toast.success(res.data.message);
       setShowModal(false);
       fetchLogs();
@@ -78,7 +78,7 @@ const Waste = () => {
 
   const handleMarkMissed = async (id) => {
     try {
-      await API.put(`${API_URL}/waste/${id}/miss`, {
+      await API.put(`/waste/${id}/miss`, {
         missedReason: "Marked by admin",
       });
       toast.success("Marked as missed");
@@ -91,7 +91,7 @@ const Waste = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this log?")) return;
     try {
-      await API.delete(`${API_URL}/waste/${id}`);
+      await API.delete(`/waste/${id}`);
       toast.success("Log deleted");
       fetchLogs();
     } catch (error) {

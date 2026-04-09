@@ -18,7 +18,7 @@ const Visitors = () => {
       let query = "?";
       if (filterPurpose) query += `purpose=${filterPurpose}&`;
       if (filterStatus) query += `approvalStatus=${filterStatus}`;
-      const res = await API.get(`${API_URL}/visitors${query}`);
+      const res = await API.get(`/visitors${query}`);
       setVisitors(res.data.visitors);
     } catch (error) {
       toast.error("Failed to fetch visitors");
@@ -34,7 +34,7 @@ const Visitors = () => {
   const handleBlacklist = async (id) => {
     if (!window.confirm("Blacklist this visitor?")) return;
     try {
-      await API.put(`${API_URL}/visitors/${id}/blacklist`);
+      await API.put(`/visitors/${id}/blacklist`);
       toast.success("Visitor blacklisted");
       fetchVisitors();
     } catch (error) {
@@ -45,7 +45,7 @@ const Visitors = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this visitor record?")) return;
     try {
-      await API.delete(`${API_URL}/visitors/${id}`);
+      await API.delete(`/visitors/${id}`);
       toast.success("Visitor deleted");
       fetchVisitors();
     } catch (error) {

@@ -38,7 +38,7 @@ const Parking = () => {
       let query = "?";
       if (filterStatus) query += `status=${filterStatus}&`;
       if (filterType) query += `slotType=${filterType}`;
-      const res = await API.get(`${API_URL}/parking${query}`);
+      const res = await API.get(`/parking${query}`);
       setSlots(res.data.slots);
     } catch (error) {
       toast.error("Failed to fetch slots");
@@ -49,7 +49,7 @@ const Parking = () => {
 
   const fetchSocieties = async () => {
     try {
-      const res = await API.get(`${API_URL}/societies`);
+      const res = await API.get(`/societies`);
       setSocieties(res.data.societies);
     } catch (error) {}
   };
@@ -66,7 +66,7 @@ const Parking = () => {
       return;
     }
     try {
-      await API.post(`${API_URL}/parking`, {
+      await API.post(`/parking`, {
         ...formData,
         monthlyCharge: Number(formData.monthlyCharge),
       });
@@ -85,10 +85,7 @@ const Parking = () => {
       return;
     }
     try {
-      await API.put(
-        `${API_URL}/parking/${selectedSlot._id}/assign`,
-        assignData,
-      );
+      await API.put(`/parking/${selectedSlot._id}/assign`, assignData);
       toast.success("Slot assigned successfully");
       setShowAssignModal(false);
       fetchSlots();
@@ -100,7 +97,7 @@ const Parking = () => {
   const handleUnassign = async (id) => {
     if (!window.confirm("Unassign this slot?")) return;
     try {
-      await API.put(`${API_URL}/parking/${id}/unassign`);
+      await API.put(`/parking/${id}/unassign`);
       toast.success("Slot unassigned");
       fetchSlots();
     } catch (error) {
@@ -111,7 +108,7 @@ const Parking = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this slot?")) return;
     try {
-      await API.delete(`${API_URL}/parking/${id}`);
+      await API.delete(`/parking/${id}`);
       toast.success("Slot deleted");
       fetchSlots();
     } catch (error) {
