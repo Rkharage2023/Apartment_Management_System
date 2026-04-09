@@ -1,6 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import API from "../../api/axios";
-
 // Get user from localStorage
 const user = JSON.parse(localStorage.getItem("user"));
 

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const API = axios.create({
+const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1",
 });
 
@@ -25,5 +25,4 @@ API.interceptors.response.use(
   },
 );
 
-// ✅ export at the bottom — after all interceptors
 export default API;

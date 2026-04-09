@@ -5,7 +5,7 @@ import { loginUser, clearError } from "../../features/auth/authSlice";
 import toast from "react-hot-toast";
 import { FaEye, FaEyeSlash, FaBuilding } from "react-icons/fa";
 
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
+// ✅ No API_URL here — axios.js handles it
 
 const Login = () => {
   const dispatch = useDispatch();
@@ -18,16 +18,14 @@ const Login = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
 
-  // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      if (user.role === "admin") navigate(`/admin`);
-      else if (user.role === "resident") navigate(`/resident`);
-      else navigate(`/login`);
+      if (user.role === "admin") navigate("/admin");
+      else if (user.role === "resident") navigate("/resident");
+      else navigate("/login");
     }
   }, [user, navigate]);
 
-  // Show error toast
   useEffect(() => {
     if (error) {
       toast.error(error);
@@ -41,19 +39,16 @@ const Login = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
     if (!formData.email || !formData.password) {
       toast.error("Please fill all fields");
       return;
     }
-
     dispatch(loginUser(formData));
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-600 to-primary-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4">
             <FaBuilding className="text-primary-600 text-3xl" />
@@ -62,7 +57,6 @@ const Login = () => {
           <p className="text-primary-200 mt-1">Society Management System</p>
         </div>
 
-        {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-1">
             Welcome back
@@ -72,7 +66,6 @@ const Login = () => {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Email Address
@@ -87,7 +80,6 @@ const Login = () => {
               />
             </div>
 
-            {/* Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Password
@@ -111,7 +103,6 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
@@ -146,14 +137,12 @@ const Login = () => {
             </button>
           </form>
 
-          {/* Divider */}
           <div className="flex items-center my-6">
             <div className="flex-1 border-t border-gray-200" />
             <span className="px-3 text-sm text-gray-400">or</span>
             <div className="flex-1 border-t border-gray-200" />
           </div>
 
-          {/* Demo Credentials */}
           <div className="bg-gray-50 rounded-xl p-4 mb-6">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Demo Credentials

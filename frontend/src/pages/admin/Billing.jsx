@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { API } from "../../api/axios";
+import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaMoneyBill, FaCheck } from "react-icons/fa";
 

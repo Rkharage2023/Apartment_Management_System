@@ -5,7 +5,6 @@ import { registerUser, clearError } from "../../features/auth/authSlice";
 import toast from "react-hot-toast";
 import { FaEye, FaEyeSlash, FaBuilding } from "react-icons/fa";
 
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
 
 const Register = () => {
   const dispatch = useDispatch();
