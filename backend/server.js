@@ -1,7 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import helmet from "helmet";
 import connectDB from "./config/db.js";
 
 // Routes
@@ -25,27 +24,27 @@ connectDB();
 
 const app = express();
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  process.env.FRONTEND_URL, // Vercel URL added after deploy
-];
-
+// ✅ CORS first — before everything
 app.use(
   cors({
     origin: "*",
-    credentials: false,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
+
+// ✅ Handle preflight requests
 app.options("*", cors());
 
-// Security & Parsing
-app.use(helmet());
+// ✅ Body parser
 app.use(express.json());
+
+// ✅ NO helmet — remove it completely for now
+// Helmet blocks cross-origin requests in production
 
 // Health Check
 app.get("/", (req, res) => {
-  res.json({ message: "API Running ✅" });
+  res.json({ message: "API Running ✅", env: process.env.NODE_ENV });
 });
 
 // All Routes
