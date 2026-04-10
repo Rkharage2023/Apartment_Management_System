@@ -33,11 +33,8 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // allow all origins temporarily (safe fix)
-      callback(null, true);
-    },
-    credentials: true,
+    origin: "*",
+    credentials: false,
   }),
 );
 app.options("*", cors());

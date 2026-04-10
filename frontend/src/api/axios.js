@@ -3,7 +3,8 @@ import axios from "axios";
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1",
 });
-
+console.log(import.meta.env.VITE_API_URL);
+console.log("BASE URL:", import.meta.env.VITE_API_URL);
 // Auto attach token to every request
 API.interceptors.request.use((config) => {
   const user = JSON.parse(localStorage.getItem("user"));
