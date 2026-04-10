@@ -4,8 +4,6 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaEdit, FaTrash, FaCity } from "react-icons/fa";
 
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
-
 const Societies = () => {
   const [societies, setSocieties] = useState([]);
   const [loading, setLoading] = useState(false);

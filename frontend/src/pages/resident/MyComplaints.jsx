@@ -4,8 +4,6 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaExclamationCircle } from "react-icons/fa";
 
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
-
 const MyComplaints = () => {
   const [complaints, setComplaints] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -13,8 +11,8 @@ const MyComplaints = () => {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [filterStatus, setFilterStatus] = useState("");
-  const [societies, setSocieties] = useState([]);
-  const [flats, setFlats] = useState([]);
+  const [myFlat, setMyFlat] = useState(null);
+  const [flatLoading, setFlatLoading] = useState(true);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -30,6 +28,7 @@ const MyComplaints = () => {
     feedback: "",
   });
 
+  // ✅ Fetch complaints
   const fetchComplaints = async () => {
     try {
       setLoading(true);
@@ -43,46 +42,67 @@ const MyComplaints = () => {
     }
   };
 
-  const fetchSocietiesAndFlats = async () => {
+  // ✅ Fetch resident's flat — sets society and flat in formData
+  const fetchMyFlat = async () => {
     try {
-      const [sRes, fRes] = await Promise.all([
-        API.get(`/societies`),
-        API.get(`/flats/my-flat`).catch(() => ({
-          data: { flat: null },
-        })),
-      ]);
-      setSocieties(sRes.data.societies);
-      if (fRes.data.flat) {
-        setFlats([fRes.data.flat]);
-        setFormData((prev) => ({
-          ...prev,
-          society: fRes.data.flat.society?._id || "",
-          flat: fRes.data.flat._id || "",
-        }));
-      }
-    } catch (error) {}
+      setFlatLoading(true);
+      const res = await API.get("/flats/my-flat");
+      const flat = res.data.flat;
+      setMyFlat(flat);
+
+      // ✅ Auto fill society and flat IDs
+      setFormData((prev) => ({
+        ...prev,
+        society: flat.society?._id || flat.society || "",
+        flat: flat._id || "",
+      }));
+    } catch (error) {
+      // Resident has no flat assigned — show warning in modal
+      setMyFlat(null);
+    } finally {
+      setFlatLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchComplaints();
-    fetchSocietiesAndFlats();
+    fetchMyFlat();
   }, [filterStatus]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (
-      !formData.title ||
-      !formData.description ||
-      !formData.society ||
-      !formData.flat
-    ) {
-      toast.error("Please fill all required fields");
+
+    // ✅ Check if flat is assigned
+    if (!myFlat) {
+      toast.error(
+        "You need a flat assigned before raising a complaint. Contact your admin.",
+      );
       return;
     }
+
+    if (!formData.title || !formData.description) {
+      toast.error("Please fill title and description");
+      return;
+    }
+
+    if (!formData.society || !formData.flat) {
+      toast.error("Society or flat info missing. Please contact admin.");
+      return;
+    }
+
     try {
-      await API.post(`/complaints`, formData);
+      await API.post("/complaints", {
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        priority: formData.priority,
+        society: formData.society,
+        flat: formData.flat,
+      });
       toast.success("Complaint raised successfully");
       setShowModal(false);
+
+      // Reset only text fields — keep society and flat
       setFormData((prev) => ({
         ...prev,
         title: "",
@@ -90,6 +110,7 @@ const MyComplaints = () => {
         category: "plumbing",
         priority: "medium",
       }));
+
       fetchComplaints();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to raise complaint");
@@ -136,12 +157,49 @@ const MyComplaints = () => {
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            if (!myFlat) {
+              toast.error("No flat assigned. Contact admin first.");
+              return;
+            }
+            setShowModal(true);
+          }}
           className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
         >
           <FaPlus /> Raise Complaint
         </button>
       </div>
+
+      {/* No flat warning */}
+      {!flatLoading && !myFlat && (
+        <div className="bg-yellow-50 border border-yellow-100 rounded-2xl p-4 mb-6">
+          <p className="text-yellow-700 font-medium text-sm">
+            ⚠️ No flat assigned to your account
+          </p>
+          <p className="text-yellow-600 text-xs mt-1">
+            You need a flat assigned before you can raise complaints. Please
+            contact your admin.
+          </p>
+        </div>
+      )}
+
+      {/* Flat info if assigned */}
+      {myFlat && (
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-4 mb-6 flex items-center gap-3">
+          <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center text-white text-sm font-bold">
+            {myFlat.flatNumber?.charAt(0)}
+          </div>
+          <div>
+            <p className="text-green-700 font-medium text-sm">
+              Raising complaint for Flat {myFlat.flatNumber}
+            </p>
+            <p className="text-green-600 text-xs mt-0.5">
+              {myFlat.society?.name} • Block {myFlat.block} • Floor{" "}
+              {myFlat.floor}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -171,12 +229,14 @@ const MyComplaints = () => {
         <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
           <FaExclamationCircle className="text-gray-300 text-5xl mx-auto mb-3" />
           <p className="text-gray-500">No complaints found</p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="mt-3 text-primary-600 text-sm font-medium hover:underline"
-          >
-            Raise your first complaint
-          </button>
+          {myFlat && (
+            <button
+              onClick={() => setShowModal(true)}
+              className="mt-3 text-primary-600 text-sm font-medium hover:underline"
+            >
+              Raise your first complaint
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -201,7 +261,7 @@ const MyComplaints = () => {
                     </span>
                   </div>
                   <p className="text-sm text-gray-500 mb-2">{c.description}</p>
-                  <div className="flex gap-4 text-xs text-gray-400">
+                  <div className="flex gap-4 text-xs text-gray-400 flex-wrap">
                     <span className="capitalize">Category: {c.category}</span>
                     <span>
                       Raised:{" "}
@@ -217,7 +277,6 @@ const MyComplaints = () => {
                 </div>
               </div>
 
-              {/* Assigned To */}
               {c.assignedTo && (
                 <div className="mt-3 pt-3 border-t border-gray-50">
                   <p className="text-xs text-gray-400">
@@ -229,7 +288,6 @@ const MyComplaints = () => {
                 </div>
               )}
 
-              {/* Rating */}
               {c.rating && (
                 <div className="mt-2">
                   <p className="text-xs text-gray-400">
@@ -238,7 +296,6 @@ const MyComplaints = () => {
                 </div>
               )}
 
-              {/* Feedback Button */}
               {c.status === "resolved" && !c.rating && (
                 <div className="mt-3 pt-3 border-t border-gray-50">
                   <button
@@ -265,8 +322,14 @@ const MyComplaints = () => {
               <h2 className="text-lg font-bold text-gray-800">
                 Raise a Complaint
               </h2>
+              {myFlat && (
+                <p className="text-sm text-gray-500 mt-1">
+                  For Flat {myFlat.flatNumber} • {myFlat.society?.name}
+                </p>
+              )}
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {/* Title */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Title *
@@ -280,6 +343,8 @@ const MyComplaints = () => {
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
+
+              {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Description *
@@ -294,6 +359,8 @@ const MyComplaints = () => {
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
                 />
               </div>
+
+              {/* Category & Priority */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -343,12 +410,21 @@ const MyComplaints = () => {
                 </div>
               </div>
 
-              {/* Society & Flat auto-filled */}
-              {formData.society && (
-                <p className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded-lg">
-                  ✅ Society and flat auto-filled from your profile
+              {/* Auto-filled info */}
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-1">
+                <p className="text-xs font-medium text-blue-700">
+                  Auto-filled Details
                 </p>
-              )}
+                <p className="text-xs text-blue-600">
+                  🏠 Flat: {myFlat?.flatNumber} ({myFlat?.type})
+                </p>
+                <p className="text-xs text-blue-600">
+                  🏢 Society: {myFlat?.society?.name}
+                </p>
+                <p className="text-xs text-blue-600">
+                  📍 Block {myFlat?.block} • Floor {myFlat?.floor}
+                </p>
+              </div>
 
               <div className="flex gap-3 pt-2">
                 <button
