@@ -4,6 +4,7 @@ import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import PrivateRoute from "./components/common/PrivateRoute";
 import NotFound from "./pages/NotFound";
+import AIChatBubble from "./components/common/AIChatBubble";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -37,42 +38,45 @@ const RootRedirect = () => {
 
 function App() {
   return (
-    <Routes>
-      {/* Root → smart redirect */}
-      <Route path="/" element={<RootRedirect />} />
+    <>
+      <Routes>
+        {/* Root → smart redirect */}
+        <Route path="/" element={<RootRedirect />} />
 
-      {/* Public Routes */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+        {/* Public Routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-      {/* Admin Routes */}
-      <Route path="/admin" element={<PrivateRoute role="admin" />}>
-        <Route index element={<AdminDashboard />} />
-        <Route path="societies" element={<Societies />} />
-        <Route path="flats" element={<Flats />} />
-        <Route path="billing" element={<Billing />} />
-        <Route path="complaints" element={<Complaints />} />
-        <Route path="notices" element={<Notices />} />
-        <Route path="visitors" element={<Visitors />} />
-        <Route path="parking" element={<Parking />} />
-        <Route path="events" element={<Events />} />
-        <Route path="waste" element={<Waste />} />
-        <Route path="users" element={<Users />} />
-      </Route>
+        {/* Admin Routes */}
+        <Route path="/admin" element={<PrivateRoute role="admin" />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="societies" element={<Societies />} />
+          <Route path="flats" element={<Flats />} />
+          <Route path="billing" element={<Billing />} />
+          <Route path="complaints" element={<Complaints />} />
+          <Route path="notices" element={<Notices />} />
+          <Route path="visitors" element={<Visitors />} />
+          <Route path="parking" element={<Parking />} />
+          <Route path="events" element={<Events />} />
+          <Route path="waste" element={<Waste />} />
+          <Route path="users" element={<Users />} />
+        </Route>
 
-      {/* Resident Routes */}
-      <Route path="/resident" element={<PrivateRoute role="resident" />}>
-        <Route index element={<ResidentDashboard />} />
-        <Route path="my-flat" element={<MyFlat />} />
-        <Route path="my-bills" element={<MyBills />} />
-        <Route path="my-complaints" element={<MyComplaints />} />
-        <Route path="my-visitors" element={<MyVisitors />} />
-        <Route path="my-parking" element={<MyParking />} />
-      </Route>
+        {/* Resident Routes */}
+        <Route path="/resident" element={<PrivateRoute role="resident" />}>
+          <Route index element={<ResidentDashboard />} />
+          <Route path="my-flat" element={<MyFlat />} />
+          <Route path="my-bills" element={<MyBills />} />
+          <Route path="my-complaints" element={<MyComplaints />} />
+          <Route path="my-visitors" element={<MyVisitors />} />
+          <Route path="my-parking" element={<MyParking />} />
+        </Route>
 
-      {/* 404 */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        {/* 404 */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      <AIChatBubble />
+    </>
   );
 }
 
