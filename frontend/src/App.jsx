@@ -70,12 +70,12 @@ function App() {
           <Route path="my-complaints" element={<MyComplaints />} />
           <Route path="my-visitors" element={<MyVisitors />} />
           <Route path="my-parking" element={<MyParking />} />
-          <AIChatBubble />
         </Route>
 
         {/* 404 */}
         <Route path="*" element={<NotFound />} />
       </Routes>
+      <AIChatBubble />
     </>
   );
 }
