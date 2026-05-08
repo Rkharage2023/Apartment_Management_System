@@ -4,11 +4,11 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaMoneyBill, FaCheck } from "react-icons/fa";
 
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
-
 const Billing = () => {
   const [bills, setBills] = useState([]);
   const [societies, setSocieties] = useState([]);
+  const [flats, setFlats] = useState([]);
+  const [residents, setResidents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -33,6 +33,9 @@ const Billing = () => {
     dueDate: "",
   });
 
+  // ─────────────────────────────────────────
+  // Fetch all data
+  // ─────────────────────────────────────────
   const fetchBills = async () => {
     try {
       setLoading(true);
@@ -50,15 +53,87 @@ const Billing = () => {
 
   const fetchSocieties = async () => {
     try {
-      const res = await API.get(`/societies`);
+      const res = await API.get("/societies");
       setSocieties(res.data.societies);
+    } catch (error) {}
+  };
+
+  const fetchFlats = async () => {
+    try {
+      const res = await API.get("/flats");
+      // Only occupied flats make sense for billing
+      setFlats(res.data.flats);
+    } catch (error) {}
+  };
+
+  const fetchResidents = async () => {
+    try {
+      const res = await API.get("/users?role=resident");
+      setResidents(res.data.users);
     } catch (error) {}
   };
 
   useEffect(() => {
     fetchBills();
     fetchSocieties();
+    fetchFlats();
+    fetchResidents();
   }, [filterStatus, filterMonth]);
+
+  // ─────────────────────────────────────────
+  // When flat is selected — auto fill society and resident
+  // ─────────────────────────────────────────
+  const handleFlatChange = (flatId) => {
+    const selectedFlat = flats.find((f) => f._id === flatId);
+    if (selectedFlat) {
+      // Auto fill society
+      const societyId = selectedFlat.society?._id || selectedFlat.society || "";
+
+      // Auto fill resident — owner takes priority over tenant
+      const residentId =
+        selectedFlat.owner?._id ||
+        selectedFlat.owner ||
+        selectedFlat.tenant?._id ||
+        selectedFlat.tenant ||
+        "";
+
+      // Auto fill amount from maintenance charge
+      const amount =
+        formData.billType === "maintenance"
+          ? selectedFlat.maintenanceCharge || ""
+          : formData.billType === "parking"
+            ? selectedFlat.monthlyRent || ""
+            : "";
+
+      setFormData((prev) => ({
+        ...prev,
+        flat: flatId,
+        society: societyId,
+        resident: residentId,
+        amount: amount || prev.amount,
+      }));
+    } else {
+      setFormData((prev) => ({ ...prev, flat: flatId }));
+    }
+  };
+
+  // ─────────────────────────────────────────
+  // When bill type changes — update amount hint
+  // ─────────────────────────────────────────
+  const handleBillTypeChange = (billType) => {
+    const selectedFlat = flats.find((f) => f._id === formData.flat);
+    let amount = formData.amount;
+
+    if (selectedFlat) {
+      if (billType === "maintenance") {
+        amount = selectedFlat.maintenanceCharge || "";
+      } else if (billType === "parking") {
+        amount = selectedFlat.monthlyRent || "";
+      }
+    }
+
+    setFormData((prev) => ({ ...prev, billType, amount }));
+  };
 
   const handleCreateBill = async (e) => {
     e.preventDefault();
@@ -66,18 +141,30 @@ const Billing = () => {
       !formData.flat ||
       !formData.society ||
       !formData.resident ||
-      !formData.amount
+      !formData.amount ||
+      !formData.month ||
+      !formData.dueDate
     ) {
       toast.error("Please fill all required fields");
       return;
     }
     try {
-      await API.post(`/billing`, {
+      await API.post("/billing", {
         ...formData,
         amount: Number(formData.amount),
       });
       toast.success("Bill created successfully");
       setShowModal(false);
+      setFormData({
+        flat: "",
+        society: "",
+        resident: "",
+        billType: "maintenance",
+        amount: "",
+        dueDate: "",
+        month: "",
+        note: "",
+      });
       fetchBills();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to create bill");
@@ -91,9 +178,15 @@ const Billing = () => {
       return;
     }
     try {
-      const res = await API.post(`/billing/generate-bulk`, bulkData);
+      const res = await API.post("/billing/generate-bulk", bulkData);
       toast.success(res.data.message);
       setShowBulkModal(false);
+      setBulkData({
+        society: "",
+        month: "",
+        billType: "maintenance",
+        dueDate: "",
+      });
       fetchBills();
     } catch (error) {
       toast.error(error.response?.data?.message || "Bulk generation failed");
@@ -127,6 +220,12 @@ const Billing = () => {
     paid: "bg-green-100 text-green-600",
     overdue: "bg-red-100 text-red-600",
   };
+
+  // Get selected flat details for preview
+  const selectedFlatDetails = flats.find((f) => f._id === formData.flat);
+  const selectedResidentDetails = residents.find(
+    (r) => r._id === formData.resident,
+  );
 
   return (
     <DashboardLayout>
@@ -222,8 +321,15 @@ const Billing = () => {
               <tbody className="divide-y divide-gray-50">
                 {bills.map((b) => (
                   <tr key={b._id} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4 font-medium text-gray-800">
-                      {b.resident?.name}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs font-bold">
+                          {b.resident?.name?.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-medium text-gray-800">
+                          {b.resident?.name}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-gray-500">
                       {b.flat?.flatNumber}
@@ -233,7 +339,7 @@ const Billing = () => {
                     </td>
                     <td className="px-6 py-4 text-gray-600">{b.month}</td>
                     <td className="px-6 py-4 font-semibold text-gray-800">
-                      ₹{b.amount}
+                      ₹{b.amount?.toLocaleString()}
                     </td>
                     <td className="px-6 py-4 text-gray-500">
                       {new Date(b.dueDate).toLocaleDateString("en-IN")}
@@ -272,27 +378,120 @@ const Billing = () => {
         )}
       </div>
 
-      {/* Create Bill Modal */}
+      {/* ✅ Create Bill Modal — with dropdowns */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-100">
               <h2 className="text-lg font-bold text-gray-800">Create Bill</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Select flat — resident and society auto-fill
+              </p>
             </div>
             <form onSubmit={handleCreateBill} className="p-6 space-y-4">
+              {/* Bill Type first — affects amount auto-fill */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Flat ID *
+                  Bill Type *
                 </label>
-                <input
-                  value={formData.flat}
-                  onChange={(e) =>
-                    setFormData({ ...formData, flat: e.target.value })
-                  }
-                  placeholder="MongoDB Flat ID"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    "maintenance",
+                    "water",
+                    "electricity",
+                    "parking",
+                    "amenity",
+                    "other",
+                  ].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => handleBillTypeChange(t)}
+                      className={`py-2 px-3 rounded-xl text-xs font-medium border-2 transition capitalize ${
+                        formData.billType === t
+                          ? "border-primary-500 bg-primary-50 text-primary-600"
+                          : "border-gray-200 text-gray-500 hover:border-gray-300"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* ✅ Flat Dropdown */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Select Flat *
+                </label>
+                <select
+                  value={formData.flat}
+                  onChange={(e) => handleFlatChange(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">-- Select Flat --</option>
+                  {flats.map((f) => (
+                    <option key={f._id} value={f._id}>
+                      {f.flatNumber} — Block {f.block} — {f.type} —{" "}
+                      {f.status === "occupied"
+                        ? `👤 ${f.owner?.name || f.tenant?.name || "Occupied"}`
+                        : "Vacant"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* ✅ Auto-filled Flat Preview */}
+              {selectedFlatDetails && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-1">
+                  <p className="text-xs font-semibold text-blue-700 mb-2">
+                    Flat Details
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-blue-600">
+                    <p>🏠 Flat: {selectedFlatDetails.flatNumber}</p>
+                    <p>📐 Type: {selectedFlatDetails.type}</p>
+                    <p>🏢 Block: {selectedFlatDetails.block}</p>
+                    <p>📊 Floor: {selectedFlatDetails.floor}</p>
+                    <p>
+                      🔧 Maintenance: ₹
+                      {selectedFlatDetails.maintenanceCharge?.toLocaleString()}
+                    </p>
+                    <p>
+                      💰 Rent: ₹
+                      {selectedFlatDetails.monthlyRent?.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ Resident Dropdown — filtered by selected flat */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Select Resident *
+                </label>
+                <select
+                  value={formData.resident}
+                  onChange={(e) =>
+                    setFormData({ ...formData, resident: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">-- Select Resident --</option>
+                  {residents.map((r) => (
+                    <option key={r._id} value={r._id}>
+                      {r.name} — {r.email}{" "}
+                      {r.flatNumber ? `— Flat ${r.flatNumber}` : "— No flat"}
+                    </option>
+                  ))}
+                </select>
+                {formData.resident && selectedResidentDetails && (
+                  <p className="text-xs text-green-600 mt-1">
+                    ✅ Auto-selected: {selectedResidentDetails.name}
+                  </p>
+                )}
+              </div>
+
+              {/* ✅ Society — auto filled */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Society *
@@ -304,56 +503,25 @@ const Billing = () => {
                   }
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">Select Society</option>
+                  <option value="">-- Select Society --</option>
                   {societies.map((s) => (
                     <option key={s._id} value={s._id}>
                       {s.name}
                     </option>
                   ))}
                 </select>
+                {formData.society && (
+                  <p className="text-xs text-green-600 mt-1">
+                    ✅ Auto-filled from flat selection
+                  </p>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Resident ID *
-                </label>
-                <input
-                  value={formData.resident}
-                  onChange={(e) =>
-                    setFormData({ ...formData, resident: e.target.value })
-                  }
-                  placeholder="MongoDB User ID"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
+
+              {/* Amount, Month, Due Date */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bill Type
-                  </label>
-                  <select
-                    value={formData.billType}
-                    onChange={(e) =>
-                      setFormData({ ...formData, billType: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    {[
-                      "maintenance",
-                      "water",
-                      "electricity",
-                      "parking",
-                      "amenity",
-                      "other",
-                    ].map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Amount *
+                    Amount (₹) *
                   </label>
                   <input
                     type="number"
@@ -364,6 +532,13 @@ const Billing = () => {
                     placeholder="2000"
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
+                  {selectedFlatDetails &&
+                    formData.billType === "maintenance" && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Suggested: ₹
+                        {selectedFlatDetails.maintenanceCharge?.toLocaleString()}
+                      </p>
+                    )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -378,7 +553,7 @@ const Billing = () => {
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </div>
-                <div>
+                <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Due Date *
                   </label>
@@ -392,9 +567,11 @@ const Billing = () => {
                   />
                 </div>
               </div>
+
+              {/* Note */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Note
+                  Note (optional)
                 </label>
                 <input
                   value={formData.note}
@@ -405,6 +582,33 @@ const Billing = () => {
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
+
+              {/* Summary before submit */}
+              {formData.flat && formData.resident && formData.amount && (
+                <div className="bg-green-50 border border-green-100 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-green-700 mb-1">
+                    Bill Summary
+                  </p>
+                  <p className="text-xs text-green-600">
+                    Creating{" "}
+                    <span className="font-bold capitalize">
+                      {formData.billType}
+                    </span>{" "}
+                    bill of{" "}
+                    <span className="font-bold">
+                      ₹{Number(formData.amount).toLocaleString()}
+                    </span>{" "}
+                    for{" "}
+                    <span className="font-bold">
+                      {residents.find((r) => r._id === formData.resident)?.name}
+                    </span>{" "}
+                    (Flat{" "}
+                    {flats.find((f) => f._id === formData.flat)?.flatNumber})
+                    {formData.month && ` for ${formData.month}`}
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -434,7 +638,7 @@ const Billing = () => {
                 Bulk Generate Bills
               </h2>
               <p className="text-sm text-gray-500 mt-1">
-                Auto generate bills for all occupied flats
+                Auto generate bills for all occupied flats in a society
               </p>
             </div>
             <form onSubmit={handleBulkGenerate} className="p-6 space-y-4">
@@ -503,6 +707,20 @@ const Billing = () => {
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
+
+              {bulkData.society && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                  <p className="text-xs text-blue-600">
+                    ℹ️ Bills will be generated for all{" "}
+                    <span className="font-bold">occupied flats</span> in{" "}
+                    <span className="font-bold">
+                      {societies.find((s) => s._id === bulkData.society)?.name}
+                    </span>
+                    . Amount will be taken from each flat's maintenance charge.
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
