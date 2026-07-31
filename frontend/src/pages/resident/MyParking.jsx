@@ -4,11 +4,75 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaCar, FaBolt } from "react-icons/fa";
 
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
 
 const MyParking = () => {
   const [slot, setSlot] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [releaseLoading, setReleaseLoading] = useState(false);
+  const [requestData, setRequestData] = useState({
+    slotId: "",
+    vehicleNumber: "",
+    vehicleType: "four_wheeler",
+  });
+
+  const fetchAvailableSlots = async () => {
+    try {
+      setSlotsLoading(true);
+      const res = await API.get("/parking/available");
+      setAvailableSlots(res.data.slots);
+    } catch (error) {
+      toast.error("Failed to load available slots");
+    } finally {
+      setSlotsLoading(false);
+    }
+  };
+
+  const handleOpenRequest = () => {
+    fetchAvailableSlots();
+    setShowRequestModal(true);
+  };
+
+  const handleRequestSubmit = async (e) => {
+    e.preventDefault();
+    if (!requestData.slotId || !requestData.vehicleNumber) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+    try {
+      setSubmitLoading(true);
+      await API.put(`/parking/${requestData.slotId}/request`, {
+        vehicleNumber: requestData.vehicleNumber,
+        vehicleType: requestData.vehicleType,
+      });
+      toast.success("Parking slot booked successfully!");
+      setShowRequestModal(false);
+      setRequestData({ slotId: "", vehicleNumber: "", vehicleType: "four_wheeler" });
+      fetchMySlot();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Booking failed");
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const handleRelease = async () => {
+    if (!window.confirm("Are you sure you want to release your parking slot? This action cannot be undone.")) return;
+    try {
+      setReleaseLoading(true);
+      await API.put(`/parking/${slot._id}/release`);
+      toast.success("Parking slot released successfully");
+      setSlot(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Release failed");
+    } finally {
+      setReleaseLoading(false);
+    }
+  };
 
   const fetchMySlot = async () => {
     try {
@@ -62,14 +126,20 @@ const MyParking = () => {
       </div>
 
       {!slot ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-gray-100">
-          <FaCar className="text-gray-300 text-6xl mb-4" />
-          <h2 className="text-xl font-semibold text-gray-600">
+        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
+          <FaCar className="text-gray-300 text-6xl mb-4 animate-pulse" />
+          <h2 className="text-xl font-semibold text-gray-700">
             No Parking Slot Assigned
           </h2>
-          <p className="text-gray-400 mt-2 text-sm">
-            Contact your admin to assign a parking slot
+          <p className="text-gray-400 mt-2 text-sm max-w-sm text-center">
+            You don't have an assigned parking space yet. You can request a slot directly online.
           </p>
+          <button
+            onClick={handleOpenRequest}
+            className="mt-6 bg-primary-600 hover:bg-primary-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition"
+          >
+            Request Parking Slot
+          </button>
         </div>
       ) : (
         <div className="max-w-2xl space-y-6">
@@ -156,6 +226,119 @@ const MyParking = () => {
               <p className="text-sm text-yellow-600">{slot.note}</p>
             </div>
           )}
+
+          {/* Release Slot Button */}
+          <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-5">
+            <h3 className="text-sm font-semibold text-red-700 mb-2">Vacate Parking Slot</h3>
+            <p className="text-xs text-gray-400 mb-3">
+              If you no longer need this slot, you can release it so another resident can use it.
+            </p>
+            <button
+              onClick={handleRelease}
+              disabled={releaseLoading}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition disabled:opacity-50"
+            >
+              {releaseLoading ? "Releasing..." : "Release My Slot"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Request Parking Modal */}
+      {showRequestModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-gray-100 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-primary-600 to-primary-800 text-white">
+              <h2 className="text-lg font-bold">Request Parking Slot</h2>
+              <p className="text-xs text-primary-100 mt-1">
+                Select an available slot and enter vehicle details
+              </p>
+            </div>
+
+            <form onSubmit={handleRequestSubmit} className="p-6 space-y-4">
+              {/* Slot Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                  Select Parking Slot *
+                </label>
+                {slotsLoading ? (
+                  <p className="text-sm text-gray-400">Loading slots...</p>
+                ) : availableSlots.length === 0 ? (
+                  <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl">
+                    ⚠️ No available parking slots found in this society.
+                  </div>
+                ) : (
+                  <select
+                    value={requestData.slotId}
+                    onChange={(e) =>
+                      setRequestData({ ...requestData, slotId: e.target.value })
+                    }
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">Choose a slot</option>
+                    {availableSlots.map((s) => (
+                      <option key={s._id} value={s._id}>
+                        {s.slotNumber} — {s.slotType.replace("_", " ")} (₹{s.monthlyCharge}/mo) {s.isEVCharging ? "⚡ EV" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Vehicle Number */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                  Vehicle Number *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. MH-12-AB-1234"
+                  value={requestData.vehicleNumber}
+                  onChange={(e) =>
+                    setRequestData({ ...requestData, vehicleNumber: e.target.value.toUpperCase() })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              {/* Vehicle Type */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                  Vehicle Type
+                </label>
+                <select
+                  value={requestData.vehicleType}
+                  onChange={(e) =>
+                    setRequestData({ ...requestData, vehicleType: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="four_wheeler">🚗 4-Wheeler</option>
+                  <option value="two_wheeler">🏍️ 2-Wheeler</option>
+                  <option value="ev">⚡ Electric Vehicle</option>
+                </select>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={submitLoading}
+                  onClick={() => setShowRequestModal(false)}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitLoading || !requestData.slotId}
+                  className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitLoading ? "Booking..." : "Book Slot"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </DashboardLayout>

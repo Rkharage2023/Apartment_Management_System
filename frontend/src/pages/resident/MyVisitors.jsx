@@ -4,7 +4,6 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaUserFriends } from "react-icons/fa";
 
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
 
 const MyVisitors = () => {
   const [visitors, setVisitors] = useState([]);

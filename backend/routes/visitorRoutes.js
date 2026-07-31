@@ -178,10 +178,10 @@ router.get(
 
 // ─────────────────────────────────────────
 // @route   PUT /api/v1/visitors/:id/checkin
-// @desc    Security checks in a visitor
-// @access  Security only
+// @desc    Security / Admin checks in a visitor
+// @access  Security & Admin
 // ─────────────────────────────────────────
-router.put("/:id/checkin", protect, authorize("security"), async (req, res) => {
+router.put("/:id/checkin", protect, authorize("security", "admin"), async (req, res) => {
   try {
     const visitor = await Visitor.findById(req.params.id);
 
@@ -212,13 +212,13 @@ router.put("/:id/checkin", protect, authorize("security"), async (req, res) => {
 
 // ─────────────────────────────────────────
 // @route   PUT /api/v1/visitors/:id/checkout
-// @desc    Security checks out a visitor
-// @access  Security only
+// @desc    Security / Admin checks out a visitor
+// @access  Security & Admin
 // ─────────────────────────────────────────
 router.put(
   "/:id/checkout",
   protect,
-  authorize("security"),
+  authorize("security", "admin"),
   async (req, res) => {
     try {
       const visitor = await Visitor.findById(req.params.id);

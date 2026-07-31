@@ -311,4 +311,50 @@ router.delete("/:id", protect, authorize("admin"), async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────
+// @route   PUT /api/v1/events/:id/rsvp
+// @desc    Resident toggles RSVP for an event
+// @access  Resident only
+// ─────────────────────────────────────────
+router.put("/:id/rsvp", protect, authorize("resident"), async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    if (event.status === "cancelled" || event.status === "completed") {
+      return res.status(400).json({ message: "Cannot RSVP to this event" });
+    }
+
+    const existingIndex = event.rsvpList.findIndex(
+      (r) => r.user.toString() === req.user._id.toString()
+    );
+
+    let action;
+    if (existingIndex >= 0) {
+      // Already RSVPed — remove (toggle off)
+      event.rsvpList.splice(existingIndex, 1);
+      action = "removed";
+    } else {
+      // Check max attendees limit
+      if (event.maxAttendees > 0 && event.rsvpList.length >= event.maxAttendees) {
+        return res.status(400).json({ message: "Event is fully booked" });
+      }
+      event.rsvpList.push({ user: req.user._id, rsvpAt: new Date() });
+      action = "added";
+    }
+
+    await event.save();
+
+    res.json({
+      message: action === "added" ? "RSVP confirmed!" : "RSVP removed",
+      action,
+      rsvpCount: event.rsvpList.length,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 export default router;

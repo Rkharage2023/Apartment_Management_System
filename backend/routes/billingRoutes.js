@@ -17,17 +17,19 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
     const { flat, society, resident, billType, amount, dueDate, month, note } =
       req.body;
 
-    if (!flat || !society || !resident || !amount || !dueDate || !month) {
-      return res
-        .status(400)
-        .json({ message: "Please fill all required fields" });
-    }
+    // Validate each required field individually for clear error messages
+    if (!flat) return res.status(400).json({ message: "Please select a flat" });
+    if (!society) return res.status(400).json({ message: "Society is required (select a flat first)" });
+    if (!resident || resident === "") return res.status(400).json({ message: "Resident not found for this flat. Please ensure the flat has an owner or tenant assigned." });
+    if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "Please enter a valid amount" });
+    if (!month) return res.status(400).json({ message: "Please select a billing month" });
+    if (!dueDate) return res.status(400).json({ message: "Please select a due date" });
 
     // Check duplicate bill for same flat same month same type
-    const billExists = await Bill.findOne({ flat, month, billType });
+    const billExists = await Bill.findOne({ flat, month, billType: billType || "maintenance" });
     if (billExists) {
       return res.status(400).json({
-        message: `Bill for ${billType} already exists for ${month}`,
+        message: `A ${billType || "maintenance"} bill already exists for ${month}. Cannot generate duplicate.`,
       });
     }
 
@@ -36,7 +38,7 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
       society,
       resident,
       billType: billType || "maintenance",
-      amount,
+      amount: Number(amount),
       dueDate,
       month,
       note: note || "",
@@ -44,6 +46,11 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
 
     res.status(201).json({ message: "Bill created successfully", bill });
   } catch (error) {
+    // Return specific Mongoose validation errors
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({ message: messages.join(", ") });
+    }
     res.status(500).json({ message: error.message });
   }
 });
@@ -171,6 +178,41 @@ router.get("/my-bills", protect, authorize("resident"), async (req, res) => {
 });
 
 // ─────────────────────────────────────────
+// @route   GET /api/v1/billing/stats
+// @desc    Get billing and revenue summary stats
+// @access  Admin only
+// ─────────────────────────────────────────
+router.get("/stats", protect, authorize("admin"), async (req, res) => {
+  try {
+    const totalBills = await Bill.countDocuments();
+    const paidBills = await Bill.countDocuments({ status: "paid" });
+    const unpaidBills = await Bill.countDocuments({ status: "unpaid" });
+    const overdueBills = await Bill.countDocuments({ status: "overdue" });
+
+    const totalCollectedAgg = await Bill.aggregate([
+      { $match: { status: "paid" } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+
+    const totalPendingAgg = await Bill.aggregate([
+      { $match: { status: { $in: ["unpaid", "overdue"] } } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+
+    res.json({
+      totalBills,
+      paidBills,
+      unpaidBills,
+      overdueBills,
+      totalCollected: totalCollectedAgg[0]?.total || 0,
+      totalPending: totalPendingAgg[0]?.total || 0,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─────────────────────────────────────────
 // @route   GET /api/v1/billing/overdue
 // @desc    Get all overdue bills — mark unpaid past due date
 // @access  Admin only
@@ -255,6 +297,53 @@ router.put("/:id/pay-cash", protect, authorize("admin"), async (req, res) => {
     });
 
     res.json({ message: "Bill marked as paid (cash)", bill });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─────────────────────────────────────────
+// @route   PUT /api/v1/billing/:id/pay-online
+// @desc    Resident pays bill online
+// @access  Resident only
+// ─────────────────────────────────────────
+router.put("/:id/pay-online", protect, authorize("resident"), async (req, res) => {
+  try {
+    const bill = await Bill.findById(req.params.id);
+
+    if (!bill) {
+      return res.status(404).json({ message: "Bill not found" });
+    }
+
+    if (bill.resident.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized to pay this bill" });
+    }
+
+    if (bill.status === "paid") {
+      return res.status(400).json({ message: "Bill is already paid" });
+    }
+
+    const { paymentMethod, transactionId } = req.body;
+
+    bill.status = "paid";
+    bill.paidAt = new Date();
+    bill.paymentMethod = paymentMethod || "online";
+    await bill.save();
+
+    // Create payment record
+    await Payment.create({
+      bill: bill._id,
+      resident: bill.resident,
+      flat: bill.flat,
+      society: bill.society,
+      amount: bill.amount,
+      paymentMethod: paymentMethod || "online",
+      status: "success",
+      paidAt: new Date(),
+      razorpayPaymentId: transactionId || `TXN_${Date.now()}`
+    });
+
+    res.json({ message: "Bill paid successfully", bill });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

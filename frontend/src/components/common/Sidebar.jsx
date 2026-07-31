@@ -47,6 +47,8 @@ const residentLinks = [
     label: "Complaints",
     icon: <FaExclamationCircle />,
   },
+  { to: "/resident/notices", label: "Notices", icon: <FaBullhorn /> },
+  { to: "/resident/events", label: "Events", icon: <FaCalendarAlt /> },
   { to: "/resident/my-visitors", label: "Visitors", icon: <FaUserFriends /> },
   { to: "/resident/my-parking", label: "Parking", icon: <FaCar /> },
 ];

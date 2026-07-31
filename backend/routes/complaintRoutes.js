@@ -178,7 +178,7 @@ router.put("/:id/assign", protect, authorize("admin"), async (req, res) => {
     const { userId } = req.body;
 
     if (!userId) {
-      return res.status(400).json({ message: "Please provide userId" });
+      return res.status(400).json({ message: "Please provide staff userId" });
     }
 
     const complaint = await Complaint.findById(req.params.id);
@@ -187,10 +187,17 @@ router.put("/:id/assign", protect, authorize("admin"), async (req, res) => {
     }
 
     complaint.assignedTo = userId;
-    complaint.status = "in_progress";
+    if (complaint.status === "open") {
+      complaint.status = "in_progress";
+    }
     await complaint.save();
 
-    res.json({ message: "Complaint assigned successfully", complaint });
+    const updatedComplaint = await Complaint.findById(req.params.id)
+      .populate("assignedTo", "name email phone role")
+      .populate("raisedBy", "name email phone")
+      .populate("flat", "flatNumber block");
+
+    res.json({ message: "Complaint assigned successfully", complaint: updatedComplaint });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

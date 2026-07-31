@@ -10,6 +10,9 @@ const MyComplaints = () => {
   const [showModal, setShowModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [comment, setComment] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [myFlat, setMyFlat] = useState(null);
   const [flatLoading, setFlatLoading] = useState(true);
@@ -68,6 +71,36 @@ const MyComplaints = () => {
     fetchComplaints();
     fetchMyFlat();
   }, [filterStatus]);
+
+  const handleViewComplaint = async (complaint) => {
+    try {
+      const res = await API.get(`/complaints/${complaint._id}`);
+      setSelected(res.data.complaint);
+      setShowDetailModal(true);
+    } catch (error) {
+      setSelected(complaint);
+      setShowDetailModal(true);
+    }
+  };
+
+  const handleAddComment = async (id) => {
+    if (!comment.trim()) {
+      toast.error("Comment cannot be empty");
+      return;
+    }
+    try {
+      await API.put(`/complaints/${id}/comment`, { comment });
+      toast.success("Comment added");
+      setComment("");
+      
+      // Refresh selected complaint
+      const res = await API.get(`/complaints/${id}`);
+      setSelected(res.data.complaint);
+      fetchComplaints();
+    } catch (error) {
+      toast.error("Failed to add comment");
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -296,19 +329,25 @@ const MyComplaints = () => {
                 </div>
               )}
 
-              {c.status === "resolved" && !c.rating && (
-                <div className="mt-3 pt-3 border-t border-gray-50">
+              <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between flex-wrap gap-2">
+                <button
+                  onClick={() => handleViewComplaint(c)}
+                  className="text-xs px-3 py-1.5 bg-primary-50 hover:bg-primary-100 text-primary-600 rounded-lg font-medium transition"
+                >
+                  View Details & Discussion →
+                </button>
+                {c.status === "resolved" && !c.rating && (
                   <button
                     onClick={() => {
                       setSelectedComplaint(c);
                       setShowFeedbackModal(true);
                     }}
-                    className="text-sm text-primary-600 font-medium hover:underline"
+                    className="text-xs px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-medium transition"
                   >
-                    Rate & Close this complaint →
+                    Rate & Close
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -518,6 +557,213 @@ const MyComplaints = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Detail & Discussion Modal */}
+      {showDetailModal && selected && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-gray-800">
+                    {selected.title}
+                  </h2>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span
+                      className={`text-xs px-2 py-1 rounded-full font-medium ${priorityColors[selected.priority]}`}
+                    >
+                      {selected.priority} priority
+                    </span>
+                    <span className="text-xs text-gray-400 capitalize">
+                      {selected.category}
+                    </span>
+                    {selected.rating && (
+                      <span className="text-xs text-yellow-500">
+                        {"⭐".repeat(selected.rating)} Rated
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowDetailModal(false);
+                    setComment("");
+                  }}
+                  className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Progress Timeline */}
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-3">
+                  Resolution Timeline
+                </p>
+                <div className="flex items-center mb-4">
+                  {["open", "in_progress", "resolved", "closed"].map(
+                    (step, index) => {
+                      const STATUS_FLOW = [
+                        { value: "open", label: "Open" },
+                        { value: "in_progress", label: "In Progress" },
+                        { value: "resolved", label: "Resolved" },
+                        { value: "closed", label: "Closed" },
+                      ];
+                      const stepIndex = [
+                        "open",
+                        "in_progress",
+                        "resolved",
+                        "closed",
+                      ].indexOf(selected.status);
+                      const isCompleted = index < stepIndex;
+                      const isCurrent = index === stepIndex;
+                      const stepInfo = STATUS_FLOW.find(
+                        (s) => s.value === step,
+                      );
+
+                      return (
+                        <div key={step} className="flex items-center flex-1">
+                          <div className="flex flex-col items-center">
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition ${
+                                isCompleted
+                                  ? "bg-green-500 border-green-500 text-white"
+                                  : isCurrent
+                                    ? "bg-primary-600 border-primary-600 text-white"
+                                    : "bg-white border-gray-300 text-gray-400"
+                              }`}
+                            >
+                              {isCompleted ? "✓" : index + 1}
+                            </div>
+                            <p
+                              className={`text-xs mt-1 font-medium ${
+                                isCurrent
+                                  ? "text-primary-600"
+                                  : isCompleted
+                                    ? "text-green-500"
+                                    : "text-gray-400"
+                              }`}
+                            >
+                              {stepInfo?.label}
+                            </p>
+                          </div>
+                          {index < 3 && (
+                            <div
+                              className={`flex-1 h-0.5 mx-1 ${
+                                index < stepIndex
+                                  ? "bg-green-400"
+                                  : "bg-gray-200"
+                              }`}
+                            />
+                          )}
+                        </div>
+                      );
+                    },
+                  )}
+                </div>
+              </div>
+
+              {/* Details */}
+              <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Complaint Details
+                </p>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {selected.description}
+                </p>
+              </div>
+
+              {/* Assignment details */}
+              {selected.assignedTo && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex justify-between items-center text-sm">
+                  <span className="text-blue-700 font-medium">Assigned Staff:</span>
+                  <span className="text-blue-800 font-bold">{selected.assignedTo.name}</span>
+                </div>
+              )}
+
+              {/* Comments Thread */}
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-3">
+                  Comments & Updates ({selected.comments?.length || 0})
+                </p>
+                {(!selected.comments || selected.comments.length === 0) ? (
+                  <p className="text-xs text-gray-400 italic">No comments or updates yet.</p>
+                ) : (
+                  <div className="space-y-3 max-h-48 overflow-y-auto">
+                    {selected.comments.map((c, i) => (
+                      <div
+                        key={i}
+                        className="flex gap-3 bg-gray-50 rounded-xl p-3"
+                      >
+                        <div className="w-7 h-7 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-xs font-bold flex-shrink-0">
+                          {c.commentedBy?.name?.charAt(0).toUpperCase() || "U"}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-xs font-semibold text-gray-700">
+                              {c.commentedBy?.name || "User"}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {new Date(c.commentedAt).toLocaleDateString(
+                                "en-IN",
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}
+                            </p>
+                          </div>
+                          <p className="text-sm text-gray-600">{c.comment}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Add Comment */}
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-2">
+                  Add a reply
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddComment(selected._id);
+                    }}
+                    placeholder="Write a message or update..."
+                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                  <button
+                    onClick={() => handleAddComment(selected._id)}
+                    className="px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition"
+                  >
+                    Post
+                  </button>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <button
+                onClick={() => {
+                  setShowDetailModal(false);
+                  setComment("");
+                }}
+                className="w-full px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+              >
+                Close Details
+              </button>
+            </div>
           </div>
         </div>
       )}

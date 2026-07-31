@@ -1,5 +1,6 @@
 import express from "express";
 import Parking from "../models/Parking.js";
+import Flat from "../models/Flat.js";
 import protect from "../middleware/authMiddleware.js";
 import authorize from "../middleware/roleMiddleware.js";
 
@@ -232,6 +233,56 @@ router.put("/:id", protect, authorize("admin"), async (req, res) => {
 });
 
 // ─────────────────────────────────────────
+// @route   PUT /api/v1/parking/:id/request
+// @desc    Resident requests/self-assigns an available parking slot
+// @access  Resident only
+// ─────────────────────────────────────────
+router.put("/:id/request", protect, authorize("resident"), async (req, res) => {
+  try {
+    const { vehicleNumber, vehicleType } = req.body;
+
+    if (!vehicleNumber) {
+      return res.status(400).json({ message: "Please provide vehicle number" });
+    }
+
+    const slot = await Parking.findById(req.params.id);
+    if (!slot) {
+      return res.status(404).json({ message: "Parking slot not found" });
+    }
+
+    if (slot.status !== "available") {
+      return res.status(400).json({ message: "Slot is not available" });
+    }
+
+    // Check if resident already has a slot assigned
+    const existingSlot = await Parking.findOne({ assignedTo: req.user._id });
+    if (existingSlot) {
+      return res.status(400).json({ message: "You already have a parking slot assigned" });
+    }
+
+    // Find resident's flat
+    const flat = await Flat.findOne({
+      $or: [{ owner: req.user._id }, { tenant: req.user._id }],
+    });
+
+    if (!flat) {
+      return res.status(400).json({ message: "No flat assigned to your account yet. Cannot book parking." });
+    }
+
+    slot.assignedTo = req.user._id;
+    slot.flat = flat._id;
+    slot.vehicleNumber = vehicleNumber;
+    slot.vehicleType = vehicleType || "";
+    slot.status = "occupied";
+    await slot.save();
+
+    res.json({ message: "Parking slot booked successfully", slot });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─────────────────────────────────────────
 // @route   DELETE /api/v1/parking/:id
 // @desc    Delete parking slot
 // @access  Admin only
@@ -245,6 +296,38 @@ router.delete("/:id", protect, authorize("admin"), async (req, res) => {
 
     await slot.deleteOne();
     res.json({ message: "Parking slot deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─────────────────────────────────────────
+// @route   PUT /api/v1/parking/:id/release
+// @desc    Resident releases their assigned parking slot
+// @access  Resident only
+// ─────────────────────────────────────────
+router.put("/:id/release", protect, authorize("resident"), async (req, res) => {
+  try {
+    const slot = await Parking.findById(req.params.id);
+    if (!slot) {
+      return res.status(404).json({ message: "Parking slot not found" });
+    }
+
+    // Verify the slot is assigned to the requesting resident
+    if (!slot.assignedTo || slot.assignedTo.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "This slot is not assigned to you" });
+    }
+
+    // Release slot
+    slot.assignedTo = null;
+    slot.flat = null;
+    slot.vehicleNumber = "";
+    slot.vehicleType = "";
+    slot.status = "available";
+
+    await slot.save();
+
+    res.json({ message: "Parking slot released successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -10,7 +10,6 @@ import {
   FaSwimmingPool,
 } from "react-icons/fa";
 
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
 
 const MyFlat = () => {
   const [flat, setFlat] = useState(null);

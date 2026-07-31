@@ -4,7 +4,6 @@ import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaBullhorn, FaEdit, FaTrash } from "react-icons/fa";
 
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
 
 const Notices = () => {
   const [notices, setNotices] = useState([]);

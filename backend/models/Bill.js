@@ -52,7 +52,7 @@ const billSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ["cash", "online", "upi", "bank_transfer"],
+      enum: ["cash", "online", "upi", "bank_transfer", "card", "debit_card", "netbanking", "net_banking"],
       default: null,
     },
     razorpayOrderId: {

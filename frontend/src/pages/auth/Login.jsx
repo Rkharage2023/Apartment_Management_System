@@ -16,11 +16,27 @@ const Login = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
 
+  // Clear any stale/corrupted session on mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        // If token is missing or user object is malformed, clear it
+        if (!parsed?.token || !parsed?.role) {
+          localStorage.removeItem("user");
+        }
+      } catch {
+        localStorage.removeItem("user");
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (user) {
-      if (user.role === "admin") navigate("/admin");
-      else if (user.role === "resident") navigate("/resident");
-      else navigate("/login");
+      if (user.role === "admin") navigate("/admin", { replace: true });
+      else if (user.role === "resident") navigate("/resident", { replace: true });
+      else if (user.role === "security" || user.role === "staff") navigate("/admin", { replace: true });
     }
   }, [user, navigate]);
 

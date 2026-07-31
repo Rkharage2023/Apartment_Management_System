@@ -1,16 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import API from "../../api/axios";
 import toast from "react-hot-toast";
-import { FaUserFriends, FaBan } from "react-icons/fa";
-
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
+import { FaUserFriends, FaBan, FaSignOutAlt, FaSignInAlt, FaSearch, FaTrash } from "react-icons/fa";
 
 const Visitors = () => {
   const [visitors, setVisitors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filterPurpose, setFilterPurpose] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchVisitors = async () => {
     try {
@@ -31,8 +30,28 @@ const Visitors = () => {
     fetchVisitors();
   }, [filterPurpose, filterStatus]);
 
+  const handleCheckIn = async (id) => {
+    try {
+      await API.put(`/visitors/${id}/checkin`);
+      toast.success("Visitor checked in");
+      fetchVisitors();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Check-in failed");
+    }
+  };
+
+  const handleCheckOut = async (id) => {
+    try {
+      await API.put(`/visitors/${id}/checkout`);
+      toast.success("Visitor checked out");
+      fetchVisitors();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Check-out failed");
+    }
+  };
+
   const handleBlacklist = async (id) => {
-    if (!window.confirm("Blacklist this visitor?")) return;
+    if (!window.confirm("Blacklist this visitor? Entry will be strictly denied.")) return;
     try {
       await API.put(`/visitors/${id}/blacklist`);
       toast.success("Visitor blacklisted");
@@ -54,175 +73,200 @@ const Visitors = () => {
   };
 
   const purposeColors = {
-    guest: "bg-blue-100 text-blue-600",
-    delivery: "bg-yellow-100 text-yellow-600",
-    maintenance: "bg-orange-100 text-orange-600",
-    cab: "bg-purple-100 text-purple-600",
-    medical: "bg-red-100 text-red-600",
-    other: "bg-gray-100 text-gray-600",
+    guest: "bg-blue-100 text-blue-700 border-blue-200",
+    delivery: "bg-amber-100 text-amber-700 border-amber-200",
+    maintenance: "bg-purple-100 text-purple-700 border-purple-200",
+    cab: "bg-indigo-100 text-indigo-700 border-indigo-200",
+    medical: "bg-rose-100 text-rose-700 border-rose-200",
+    other: "bg-gray-100 text-gray-700 border-gray-200",
   };
 
   const statusColors = {
-    pending: "bg-yellow-100 text-yellow-600",
-    approved: "bg-green-100 text-green-600",
-    rejected: "bg-red-100 text-red-600",
+    pending: "bg-amber-100 text-amber-700",
+    approved: "bg-emerald-100 text-emerald-700",
+    rejected: "bg-rose-100 text-rose-700",
   };
+
+  const filteredVisitors = useMemo(() => {
+    if (!searchQuery.trim()) return visitors;
+    const q = searchQuery.toLowerCase();
+    return visitors.filter(
+      (v) =>
+        v.name?.toLowerCase().includes(q) ||
+        v.phone?.includes(q) ||
+        v.flat?.flatNumber?.toLowerCase().includes(q) ||
+        v.host?.name?.toLowerCase().includes(q)
+    );
+  }, [visitors, searchQuery]);
 
   return (
     <DashboardLayout>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Visitors</h1>
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <FaUserFriends className="text-primary-600" /> Visitor & Gate Logs
+          </h1>
           <p className="text-gray-500 text-sm mt-1">
-            Track all visitor entries
+            Real-time gate pass monitoring, visitor check-in/check-out logs, and blacklist controls
           </p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 mb-4 flex-wrap">
+      {/* Search + Filters */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1">
+          <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
+          <input
+            type="text"
+            placeholder="Search visitor by name, phone, flat, or host..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-xs"
+          />
+        </div>
+
         <select
           value={filterPurpose}
           onChange={(e) => setFilterPurpose(e.target.value)}
-          className="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-xs"
         >
-          <option value="">All Purpose</option>
-          {["guest", "delivery", "maintenance", "cab", "medical", "other"].map(
-            (p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ),
-          )}
+          <option value="">All Visit Reasons</option>
+          {["guest", "delivery", "maintenance", "cab", "medical", "other"].map((p) => (
+            <option key={p} value={p}>
+              {p.charAt(0).toUpperCase() + p.slice(1)}
+            </option>
+          ))}
         </select>
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-xs"
         >
-          <option value="">All Status</option>
+          <option value="">All Approval Status</option>
           {["pending", "approved", "rejected"].map((s) => (
             <option key={s} value={s}>
-              {s}
+              {s.charAt(0).toUpperCase() + s.slice(1)}
             </option>
           ))}
         </select>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : visitors.length === 0 ? (
+        ) : filteredVisitors.length === 0 ? (
           <div className="text-center py-12">
             <FaUserFriends className="text-gray-300 text-5xl mx-auto mb-3" />
-            <p className="text-gray-500">No visitors found</p>
+            <p className="text-gray-500 font-medium">No visitor logs found matching criteria</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
+              <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 font-medium">
                 <tr>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Name
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Phone
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Purpose
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Host
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Flat
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Entry
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Exit
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Status
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Actions
-                  </th>
+                  <th className="text-left px-6 py-4">Visitor</th>
+                  <th className="text-left px-6 py-4">Phone</th>
+                  <th className="text-left px-6 py-4">Purpose</th>
+                  <th className="text-left px-6 py-4">Host Resident</th>
+                  <th className="text-left px-6 py-4">Flat</th>
+                  <th className="text-left px-6 py-4">In / Out Logs</th>
+                  <th className="text-left px-6 py-4">Gate Pass</th>
+                  <th className="text-left px-6 py-4">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {visitors.map((v) => (
+                {filteredVisitors.map((v) => (
                   <tr
                     key={v._id}
-                    className={`hover:bg-gray-50 transition ${v.isBlacklisted ? "bg-red-50" : ""}`}
+                    className={`hover:bg-gray-50/80 transition ${v.isBlacklisted ? "bg-rose-50/50" : ""}`}
                   >
-                    <td className="px-6 py-4 font-medium text-gray-800">
-                      {v.name}
-                      {v.isBlacklisted && (
-                        <span className="ml-2 text-xs text-red-500 font-medium">
-                          🚫 Blacklisted
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-gray-500">{v.phone}</td>
                     <td className="px-6 py-4">
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full font-medium ${purposeColors[v.purpose]}`}
-                      >
+                      <p className="font-semibold text-gray-800 flex items-center gap-1.5">
+                        {v.name}
+                        {v.isBlacklisted && (
+                          <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded-full text-[10px] font-bold">
+                            Blacklisted
+                          </span>
+                        )}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4 text-gray-600">{v.phone}</td>
+                    <td className="px-6 py-4">
+                      <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border capitalize ${purposeColors[v.purpose]}`}>
                         {v.purpose}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-600">{v.host?.name}</td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {v.flat?.flatNumber}
+                    <td className="px-6 py-4 font-medium text-gray-700">{v.host?.name || "N/A"}</td>
+                    <td className="px-6 py-4 text-gray-700">
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md text-xs font-semibold">
+                        {v.flat?.flatNumber || "N/A"}
+                      </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-500">
-                      {v.entryTime ? (
-                        new Date(v.entryTime).toLocaleTimeString("en-IN", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-gray-500">
-                      {v.exitTime ? (
-                        new Date(v.exitTime).toLocaleTimeString("en-IN", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
+                    <td className="px-6 py-4 text-xs">
+                      <div>
+                        <span className="text-gray-400">In: </span>
+                        {v.entryTime ? (
+                          <span className="font-semibold text-emerald-700">
+                            {new Date(v.entryTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">Pending</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Out: </span>
+                        {v.exitTime ? (
+                          <span className="font-semibold text-rose-700">
+                            {new Date(v.exitTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">Active</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[v.approvalStatus]}`}
-                      >
+                      <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold capitalize ${statusColors[v.approvalStatus]}`}>
                         {v.approvalStatus}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-1">
+                        {!v.entryTime && !v.isBlacklisted && (
+                          <button
+                            onClick={() => handleCheckIn(v._id)}
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                            title="Check In Visitor"
+                          >
+                            <FaSignInAlt />
+                          </button>
+                        )}
+                        {v.entryTime && !v.exitTime && (
+                          <button
+                            onClick={() => handleCheckOut(v._id)}
+                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                            title="Check Out Visitor"
+                          >
+                            <FaSignOutAlt />
+                          </button>
+                        )}
                         {!v.isBlacklisted && (
                           <button
                             onClick={() => handleBlacklist(v._id)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
-                            title="Blacklist"
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            title="Blacklist Visitor"
                           >
                             <FaBan />
                           </button>
                         )}
                         <button
                           onClick={() => handleDelete(v._id)}
-                          className="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition font-medium"
+                          className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          title="Delete Record"
                         >
-                          Delete
+                          <FaTrash />
                         </button>
                       </div>
                     </td>

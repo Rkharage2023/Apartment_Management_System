@@ -4,7 +4,6 @@ import StatCard from "../../components/common/StatCard";
 import { useSelector } from "react-redux";
 import API from "../../api/axios";
 
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
 
 import {
   FaBuilding,

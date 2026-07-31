@@ -25,6 +25,8 @@ import MyBills from "./pages/resident/MyBills";
 import MyComplaints from "./pages/resident/MyComplaints";
 import MyVisitors from "./pages/resident/MyVisitors";
 import MyParking from "./pages/resident/MyParking";
+import MyNotices from "./pages/resident/Notices";
+import MyEvents from "./pages/resident/Events";
 import Users from "./pages/admin/Users";
 
 // Root redirect based on role
@@ -70,6 +72,8 @@ function App() {
           <Route path="my-complaints" element={<MyComplaints />} />
           <Route path="my-visitors" element={<MyVisitors />} />
           <Route path="my-parking" element={<MyParking />} />
+          <Route path="notices" element={<MyNotices />} />
+          <Route path="events" element={<MyEvents />} />
         </Route>
 
         {/* 404 */}

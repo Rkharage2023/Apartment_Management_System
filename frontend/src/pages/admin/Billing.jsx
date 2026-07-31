@@ -2,18 +2,46 @@ import { useState, useEffect } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import API from "../../api/axios";
 import toast from "react-hot-toast";
-import { FaPlus, FaMoneyBill, FaCheck } from "react-icons/fa";
+import { FaPlus, FaMoneyBill, FaCheck, FaHistory, FaExclamationTriangle } from "react-icons/fa";
+
+// Convert "2026-07" (input[type=month] value) → "July-2026" (DB format)
+const formatMonthLabel = (val) => {
+  if (!val) return "";
+  const [year, month] = val.split("-");
+  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  return `${monthNames[parseInt(month, 10) - 1]}-${year}`;
+};
+
+// Convert "July-2026" back to "2026-07" for the input default value
+const labelToMonthInput = (label) => {
+  if (!label) return "";
+  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const [name, year] = label.split("-");
+  const idx = monthNames.indexOf(name);
+  if (idx === -1 || !year) return "";
+  return `${year}-${String(idx + 1).padStart(2, "0")}`;
+};
 
 const Billing = () => {
   const [bills, setBills] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [stats, setStats] = useState({
+    totalCollected: 0,
+    totalPending: 0,
+    paidBills: 0,
+    unpaidBills: 0,
+    overdueBills: 0,
+  });
   const [societies, setSocieties] = useState([]);
   const [flats, setFlats] = useState([]);
   const [residents, setResidents] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [activeTab, setActiveTab] = useState("bills");
   const [filterStatus, setFilterStatus] = useState("");
-  const [filterMonth, setFilterMonth] = useState("");
+  const [filterMonth, setFilterMonth] = useState(""); // stored as "2026-07"
 
   const [formData, setFormData] = useState({
     flat: "",
@@ -22,26 +50,24 @@ const Billing = () => {
     billType: "maintenance",
     amount: "",
     dueDate: "",
-    month: "",
+    month: "",      // stored as "2026-07" for the input
     note: "",
   });
 
   const [bulkData, setBulkData] = useState({
     society: "",
-    month: "",
+    month: "",      // stored as "2026-07" for the input
     billType: "maintenance",
     dueDate: "",
   });
 
-  // ─────────────────────────────────────────
-  // Fetch all data
-  // ─────────────────────────────────────────
   const fetchBills = async () => {
     try {
       setLoading(true);
       let query = "?";
       if (filterStatus) query += `status=${filterStatus}&`;
-      if (filterMonth) query += `month=${filterMonth}`;
+      // Convert "2026-07" picker value → "July-2026" for backend filter
+      if (filterMonth) query += `month=${formatMonthLabel(filterMonth)}`;
       const res = await API.get(`/billing${query}`);
       setBills(res.data.bills);
     } catch (error) {
@@ -49,6 +75,20 @@ const Billing = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const res = await API.get("/billing/stats");
+      setStats(res.data);
+    } catch (error) {}
+  };
+
+  const fetchPaymentHistory = async () => {
+    try {
+      const res = await API.get("/billing/payments/history");
+      setPayments(res.data.payments);
+    } catch (error) {}
   };
 
   const fetchSocieties = async () => {
@@ -61,7 +101,6 @@ const Billing = () => {
   const fetchFlats = async () => {
     try {
       const res = await API.get("/flats");
-      // Only occupied flats make sense for billing
       setFlats(res.data.flats);
     } catch (error) {}
   };
@@ -75,21 +114,17 @@ const Billing = () => {
 
   useEffect(() => {
     fetchBills();
+    fetchStats();
+    fetchPaymentHistory();
     fetchSocieties();
     fetchFlats();
     fetchResidents();
   }, [filterStatus, filterMonth]);
 
-  // ─────────────────────────────────────────
-  // When flat is selected — auto fill society and resident
-  // ─────────────────────────────────────────
   const handleFlatChange = (flatId) => {
     const selectedFlat = flats.find((f) => f._id === flatId);
     if (selectedFlat) {
-      // Auto fill society
       const societyId = selectedFlat.society?._id || selectedFlat.society || "";
-
-      // Auto fill resident — owner takes priority over tenant
       const residentId =
         selectedFlat.owner?._id ||
         selectedFlat.owner ||
@@ -97,7 +132,6 @@ const Billing = () => {
         selectedFlat.tenant ||
         "";
 
-      // Auto fill amount from maintenance charge
       const amount =
         formData.billType === "maintenance"
           ? selectedFlat.maintenanceCharge || ""
@@ -117,9 +151,6 @@ const Billing = () => {
     }
   };
 
-  // ─────────────────────────────────────────
-  // When bill type changes — update amount hint
-  // ─────────────────────────────────────────
   const handleBillTypeChange = (billType) => {
     const selectedFlat = flats.find((f) => f._id === formData.flat);
     let amount = formData.amount;
@@ -137,59 +168,54 @@ const Billing = () => {
 
   const handleCreateBill = async (e) => {
     e.preventDefault();
-    if (
-      !formData.flat ||
-      !formData.society ||
-      !formData.resident ||
-      !formData.amount ||
-      !formData.month ||
-      !formData.dueDate
-    ) {
-      toast.error("Please fill all required fields");
-      return;
-    }
+    if (!formData.flat) { toast.error("Please select a flat"); return; }
+    if (!formData.resident) { toast.error("This flat has no owner/tenant assigned. Cannot bill."); return; }
+    if (!formData.amount || Number(formData.amount) <= 0) { toast.error("Please enter a valid amount"); return; }
+    if (!formData.month) { toast.error("Please select a billing month"); return; }
+    if (!formData.dueDate) { toast.error("Please select a due date"); return; }
+
     try {
+      setSubmitting(true);
       await API.post("/billing", {
         ...formData,
         amount: Number(formData.amount),
+        month: formatMonthLabel(formData.month), // convert to "July-2026"
       });
-      toast.success("Bill created successfully");
+      toast.success("Bill created successfully!");
       setShowModal(false);
-      setFormData({
-        flat: "",
-        society: "",
-        resident: "",
-        billType: "maintenance",
-        amount: "",
-        dueDate: "",
-        month: "",
-        note: "",
-      });
+      setFormData({ flat: "", society: "", resident: "", billType: "maintenance", amount: "", dueDate: "", month: "", note: "" });
       fetchBills();
+      fetchStats();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to create bill");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleBulkGenerate = async (e) => {
     e.preventDefault();
-    if (!bulkData.society || !bulkData.month || !bulkData.dueDate) {
-      toast.error("Please fill all required fields");
-      return;
-    }
+    if (!bulkData.society) { toast.error("Please select a society"); return; }
+    if (!bulkData.month) { toast.error("Please select a billing month"); return; }
+    if (!bulkData.dueDate) { toast.error("Please select a due date"); return; }
     try {
-      const res = await API.post("/billing/generate-bulk", bulkData);
-      toast.success(res.data.message);
-      setShowBulkModal(false);
-      setBulkData({
-        society: "",
-        month: "",
-        billType: "maintenance",
-        dueDate: "",
+      setSubmitting(true);
+      const res = await API.post("/billing/generate-bulk", {
+        ...bulkData,
+        month: formatMonthLabel(bulkData.month), // convert to "July-2026"
       });
+      toast.success(res.data.message);
+      if (res.data.skipped && res.data.skipped !== "None") {
+        toast(`Skipped (already billed): ${res.data.skipped}`, { icon: "⚠️" });
+      }
+      setShowBulkModal(false);
+      setBulkData({ society: "", month: "", billType: "maintenance", dueDate: "" });
       fetchBills();
+      fetchStats();
     } catch (error) {
       toast.error(error.response?.data?.message || "Bulk generation failed");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -199,6 +225,8 @@ const Billing = () => {
       await API.put(`/billing/${id}/pay-cash`);
       toast.success("Bill marked as paid");
       fetchBills();
+      fetchStats();
+      fetchPaymentHistory();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to mark paid");
     }
@@ -210,31 +238,31 @@ const Billing = () => {
       await API.delete(`/billing/${id}`);
       toast.success("Bill deleted");
       fetchBills();
+      fetchStats();
     } catch (error) {
       toast.error("Delete failed");
     }
   };
 
   const statusColors = {
-    unpaid: "bg-yellow-100 text-yellow-600",
-    paid: "bg-green-100 text-green-600",
-    overdue: "bg-red-100 text-red-600",
+    unpaid: "bg-amber-100 text-amber-700 border-amber-200",
+    paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    overdue: "bg-rose-100 text-rose-700 border-rose-200",
   };
 
-  // Get selected flat details for preview
   const selectedFlatDetails = flats.find((f) => f._id === formData.flat);
-  const selectedResidentDetails = residents.find(
-    (r) => r._id === formData.resident,
-  );
+  const selectedResidentDetails = residents.find((r) => r._id === formData.resident);
 
   return (
     <DashboardLayout>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Billing</h1>
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <FaMoneyBill className="text-primary-600" /> Billing & Revenue Management
+          </h1>
           <p className="text-gray-500 text-sm mt-1">
-            Manage bills and payments
+            Generate invoices, track resident payments, and monitor society revenue
           </p>
         </div>
         <div className="flex gap-2">
@@ -246,170 +274,220 @@ const Billing = () => {
           </button>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-xs"
           >
-            <FaPlus /> Create Bill
+            <FaPlus /> Single Bill
           </button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-        >
-          <option value="">All Status</option>
-          {["unpaid", "paid", "overdue"].map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <input
-          type="text"
-          placeholder="Filter by month e.g. April-2026"
-          value={filterMonth}
-          onChange={(e) => setFilterMonth(e.target.value)}
-          className="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-        />
+      {/* Revenue Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
+          <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Total Collected</p>
+          <p className="text-2xl font-black text-emerald-800 mt-1">₹{(stats.totalCollected || 0).toLocaleString("en-IN")}</p>
+          <p className="text-xs text-emerald-600 mt-1">{stats.paidBills || 0} paid invoices</p>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+          <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Total Pending</p>
+          <p className="text-2xl font-black text-amber-800 mt-1">₹{(stats.totalPending || 0).toLocaleString("en-IN")}</p>
+          <p className="text-xs text-amber-600 mt-1">{stats.unpaidBills || 0} unpaid invoices</p>
+        </div>
+
+        <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4">
+          <p className="text-xs font-semibold text-rose-700 uppercase tracking-wider">Overdue Bills</p>
+          <p className="text-2xl font-black text-rose-800 mt-1">{stats.overdueBills || 0}</p>
+          <p className="text-xs text-rose-600 mt-1">Action required</p>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Total Issued</p>
+          <p className="text-2xl font-black text-blue-800 mt-1">{stats.totalBills || 0}</p>
+          <p className="text-xs text-blue-600 mt-1">All time records</p>
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : bills.length === 0 ? (
-          <div className="text-center py-12">
-            <FaMoneyBill className="text-gray-300 text-5xl mx-auto mb-3" />
-            <p className="text-gray-500">No bills found</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Resident
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Flat
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Type
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Month
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Amount
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Due Date
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Status
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {bills.map((b) => (
-                  <tr key={b._id} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs font-bold">
-                          {b.resident?.name?.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="font-medium text-gray-800">
-                          {b.resident?.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-500">
-                      {b.flat?.flatNumber}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600 capitalize">
-                      {b.billType}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{b.month}</td>
-                    <td className="px-6 py-4 font-semibold text-gray-800">
-                      ₹{b.amount?.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 text-gray-500">
-                      {new Date(b.dueDate).toLocaleDateString("en-IN")}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[b.status]}`}
-                      >
-                        {b.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex gap-2">
-                        {b.status !== "paid" && (
-                          <button
-                            onClick={() => handlePayCash(b._id)}
-                            className="p-2 text-green-500 hover:bg-green-50 rounded-lg transition"
-                            title="Mark as Paid"
-                          >
-                            <FaCheck />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleDelete(b._id)}
-                          className="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition font-medium"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Tab Controls & Filters */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-semibold">
+          <button
+            onClick={() => setActiveTab("bills")}
+            className={`px-4 py-2 rounded-lg transition ${
+              activeTab === "bills" ? "bg-white text-gray-800 shadow-xs" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            All Invoices ({bills.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("payments")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition ${
+              activeTab === "payments" ? "bg-white text-gray-800 shadow-xs" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <FaHistory /> Payment Log ({payments.length})
+          </button>
+        </div>
+
+        {activeTab === "bills" && (
+          <div className="flex gap-2 flex-wrap">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">All Status</option>
+              <option value="unpaid">Unpaid</option>
+              <option value="paid">Paid</option>
+              <option value="overdue">Overdue</option>
+            </select>
+            <input
+              type="month"
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
           </div>
         )}
       </div>
 
-      {/* ✅ Create Bill Modal — with dropdowns */}
+      {/* Content Table Views */}
+      {activeTab === "bills" ? (
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : bills.length === 0 ? (
+            <div className="text-center py-12">
+              <FaMoneyBill className="text-gray-300 text-5xl mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">No bills found matching filters</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 font-medium">
+                  <tr>
+                    <th className="text-left px-6 py-4">Resident</th>
+                    <th className="text-left px-6 py-4">Flat No</th>
+                    <th className="text-left px-6 py-4">Bill Type</th>
+                    <th className="text-left px-6 py-4">Month</th>
+                    <th className="text-left px-6 py-4">Amount</th>
+                    <th className="text-left px-6 py-4">Due Date</th>
+                    <th className="text-left px-6 py-4">Status</th>
+                    <th className="text-left px-6 py-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {bills.map((b) => (
+                    <tr key={b._id} className="hover:bg-gray-50 transition">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-primary-600 flex items-center justify-center text-white text-xs font-bold">
+                            {b.resident?.name?.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="font-semibold text-gray-800">{b.resident?.name || "N/A"}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-medium text-gray-700">{b.flat?.flatNumber || "N/A"}</td>
+                      <td className="px-6 py-4 text-gray-600 capitalize">{b.billType}</td>
+                      <td className="px-6 py-4 text-gray-600 font-medium">{b.month}</td>
+                      <td className="px-6 py-4 font-extrabold text-gray-900">₹{b.amount?.toLocaleString("en-IN")}</td>
+                      <td className="px-6 py-4 text-gray-500 text-xs">{new Date(b.dueDate).toLocaleDateString("en-IN")}</td>
+                      <td className="px-6 py-4">
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-semibold border capitalize ${statusColors[b.status]}`}>
+                          {b.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1">
+                          {b.status !== "paid" && (
+                            <button
+                              onClick={() => handlePayCash(b._id)}
+                              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                              title="Mark as Paid via Cash"
+                            >
+                              <FaCheck />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(b._id)}
+                            className="px-2.5 py-1 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-xs font-semibold transition"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Payment History Log Tab */
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
+          {payments.length === 0 ? (
+            <div className="text-center py-12">
+              <FaHistory className="text-gray-300 text-5xl mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">No payment history recorded yet</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 font-medium">
+                  <tr>
+                    <th className="text-left px-6 py-4">Resident</th>
+                    <th className="text-left px-6 py-4">Flat No</th>
+                    <th className="text-left px-6 py-4">Amount</th>
+                    <th className="text-left px-6 py-4">Payment Method</th>
+                    <th className="text-left px-6 py-4">Txn Ref ID</th>
+                    <th className="text-left px-6 py-4">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {payments.map((p) => (
+                    <tr key={p._id} className="hover:bg-gray-50 transition">
+                      <td className="px-6 py-4 font-semibold text-gray-800">{p.resident?.name || "N/A"}</td>
+                      <td className="px-6 py-4 font-medium text-gray-700">{p.flat?.flatNumber || "N/A"}</td>
+                      <td className="px-6 py-4 font-extrabold text-emerald-600">₹{p.amount?.toLocaleString("en-IN")}</td>
+                      <td className="px-6 py-4">
+                        <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-semibold uppercase">
+                          {p.paymentMethod}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-gray-500">{p.razorpayPaymentId || `PAY_${p._id.slice(-6)}`}</td>
+                      <td className="px-6 py-4 text-xs text-gray-400">{new Date(p.paidAt).toLocaleDateString("en-IN")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Create Bill Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-800">Create Bill</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Select flat — resident and society auto-fill
-              </p>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gray-50">
+              <h2 className="text-lg font-bold text-gray-800">Create New Bill</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Generate single maintenance, water, or parking invoice.</p>
             </div>
             <form onSubmit={handleCreateBill} className="p-6 space-y-4">
-              {/* Bill Type first — affects amount auto-fill */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Bill Type *
-                </label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Bill Type *</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {[
-                    "maintenance",
-                    "water",
-                    "electricity",
-                    "parking",
-                    "amenity",
-                    "other",
-                  ].map((t) => (
+                  {["maintenance", "water", "electricity", "parking", "amenity", "other"].map((t) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => handleBillTypeChange(t)}
-                      className={`py-2 px-3 rounded-xl text-xs font-medium border-2 transition capitalize ${
+                      className={`py-2 px-2 rounded-xl text-xs font-semibold border transition capitalize ${
                         formData.billType === t
-                          ? "border-primary-500 bg-primary-50 text-primary-600"
+                          ? "border-primary-600 bg-primary-50 text-primary-700"
                           : "border-gray-200 text-gray-500 hover:border-gray-300"
                       }`}
                     >
@@ -419,209 +497,82 @@ const Billing = () => {
                 </div>
               </div>
 
-              {/* ✅ Flat Dropdown */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Select Flat *
-                </label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Select Flat *</label>
                 <select
                   value={formData.flat}
                   onChange={(e) => handleFlatChange(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">-- Select Flat --</option>
+                  <option value="">-- Select Occupied Flat --</option>
                   {flats.map((f) => (
                     <option key={f._id} value={f._id}>
-                      {f.flatNumber} — Block {f.block} — {f.type} —{" "}
-                      {f.status === "occupied"
-                        ? `👤 ${f.owner?.name || f.tenant?.name || "Occupied"}`
-                        : "Vacant"}
+                      Flat {f.flatNumber} (Block {f.block}) — {f.owner?.name || f.tenant?.name || "Occupied"}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* ✅ Auto-filled Flat Preview */}
-              {selectedFlatDetails && (
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-1">
-                  <p className="text-xs font-semibold text-blue-700 mb-2">
-                    Flat Details
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-blue-600">
-                    <p>🏠 Flat: {selectedFlatDetails.flatNumber}</p>
-                    <p>📐 Type: {selectedFlatDetails.type}</p>
-                    <p>🏢 Block: {selectedFlatDetails.block}</p>
-                    <p>📊 Floor: {selectedFlatDetails.floor}</p>
-                    <p>
-                      🔧 Maintenance: ₹
-                      {selectedFlatDetails.maintenanceCharge?.toLocaleString()}
-                    </p>
-                    <p>
-                      💰 Rent: ₹
-                      {selectedFlatDetails.monthlyRent?.toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* ✅ Resident Dropdown — filtered by selected flat */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Select Resident *
-                </label>
-                <select
-                  value={formData.resident}
-                  onChange={(e) =>
-                    setFormData({ ...formData, resident: e.target.value })
-                  }
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">-- Select Resident --</option>
-                  {residents.map((r) => (
-                    <option key={r._id} value={r._id}>
-                      {r.name} — {r.email}{" "}
-                      {r.flatNumber ? `— Flat ${r.flatNumber}` : "— No flat"}
-                    </option>
-                  ))}
-                </select>
-                {formData.resident && selectedResidentDetails && (
-                  <p className="text-xs text-green-600 mt-1">
-                    ✅ Auto-selected: {selectedResidentDetails.name}
-                  </p>
-                )}
-              </div>
-
-              {/* ✅ Society — auto filled */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Society *
-                </label>
-                <select
-                  value={formData.society}
-                  onChange={(e) =>
-                    setFormData({ ...formData, society: e.target.value })
-                  }
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">-- Select Society --</option>
-                  {societies.map((s) => (
-                    <option key={s._id} value={s._id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                {formData.society && (
-                  <p className="text-xs text-green-600 mt-1">
-                    ✅ Auto-filled from flat selection
-                  </p>
-                )}
-              </div>
-
-              {/* Amount, Month, Due Date */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Amount (₹) *
-                  </label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Amount (₹) *</label>
                   <input
                     type="number"
                     value={formData.amount}
-                    onChange={(e) =>
-                      setFormData({ ...formData, amount: e.target.value })
-                    }
-                    placeholder="2000"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    placeholder="2500"
+                    min="1"
+                    className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
-                  {selectedFlatDetails &&
-                    formData.billType === "maintenance" && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        Suggested: ₹
-                        {selectedFlatDetails.maintenanceCharge?.toLocaleString()}
-                      </p>
-                    )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Month *
-                  </label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Billing Month *</label>
                   <input
+                    type="month"
                     value={formData.month}
-                    onChange={(e) =>
-                      setFormData({ ...formData, month: e.target.value })
-                    }
-                    placeholder="April-2026"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    onChange={(e) => setFormData({ ...formData, month: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Due Date *
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.dueDate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, dueDate: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
+                  {formData.month && (
+                    <p className="text-xs text-primary-600 mt-1 font-medium">
+                      → {formatMonthLabel(formData.month)}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* Note */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Note (optional)
-                </label>
-                <input
-                  value={formData.note}
-                  onChange={(e) =>
-                    setFormData({ ...formData, note: e.target.value })
-                  }
-                  placeholder="Optional note"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-
-              {/* Summary before submit */}
-              {formData.flat && formData.resident && formData.amount && (
-                <div className="bg-green-50 border border-green-100 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-green-700 mb-1">
-                    Bill Summary
-                  </p>
-                  <p className="text-xs text-green-600">
-                    Creating{" "}
-                    <span className="font-bold capitalize">
-                      {formData.billType}
-                    </span>{" "}
-                    bill of{" "}
-                    <span className="font-bold">
-                      ₹{Number(formData.amount).toLocaleString()}
-                    </span>{" "}
-                    for{" "}
-                    <span className="font-bold">
-                      {residents.find((r) => r._id === formData.resident)?.name}
-                    </span>{" "}
-                    (Flat{" "}
-                    {flats.find((f) => f._id === formData.flat)?.flatNumber})
-                    {formData.month && ` for ${formData.month}`}
-                  </p>
+              {/* Resident warning */}
+              {formData.flat && !formData.resident && (
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl px-4 py-2.5 text-xs font-semibold">
+                  <FaExclamationTriangle />
+                  This flat has no owner or tenant assigned. Assign a resident to the flat first before billing.
                 </div>
               )}
 
-              <div className="flex gap-3 pt-2">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Due Date *</label>
+                <input
+                  type="date"
+                  value={formData.dueDate}
+                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-medium"
+                  onClick={() => { setShowModal(false); setFormData({ flat: "", society: "", resident: "", billType: "maintenance", amount: "", dueDate: "", month: "", note: "" }); }}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition"
+                  disabled={submitting || !formData.resident}
+                  className="flex-1 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Create Bill
+                  {submitting ? "Creating..." : "Create Bill"}
                 </button>
               </div>
             </form>
@@ -631,29 +582,21 @@ const Billing = () => {
 
       {/* Bulk Generate Modal */}
       {showBulkModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-800">
-                Bulk Generate Bills
-              </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Auto generate bills for all occupied flats in a society
-              </p>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gray-50">
+              <h2 className="text-lg font-bold text-gray-800">Bulk Generate Bills</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Generate invoices automatically for all occupied society flats.</p>
             </div>
             <form onSubmit={handleBulkGenerate} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Society *
-                </label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Society *</label>
                 <select
                   value={bulkData.society}
-                  onChange={(e) =>
-                    setBulkData({ ...bulkData, society: e.target.value })
-                  }
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  onChange={(e) => setBulkData({ ...bulkData, society: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">Select Society</option>
+                  <option value="">-- Select Society --</option>
                   {societies.map((s) => (
                     <option key={s._id} value={s._id}>
                       {s.name}
@@ -661,79 +604,46 @@ const Billing = () => {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Bill Type
-                </label>
-                <select
-                  value={bulkData.billType}
-                  onChange={(e) =>
-                    setBulkData({ ...bulkData, billType: e.target.value })
-                  }
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  {["maintenance", "water", "electricity", "parking"].map(
-                    (t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ),
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Billing Month *</label>
+                  <input
+                    type="month"
+                    value={bulkData.month}
+                    onChange={(e) => setBulkData({ ...bulkData, month: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                  {bulkData.month && (
+                    <p className="text-xs text-primary-600 mt-1 font-medium">
+                      → {formatMonthLabel(bulkData.month)}
+                    </p>
                   )}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Month *
-                </label>
-                <input
-                  value={bulkData.month}
-                  onChange={(e) =>
-                    setBulkData({ ...bulkData, month: e.target.value })
-                  }
-                  placeholder="April-2026"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Due Date *
-                </label>
-                <input
-                  type="date"
-                  value={bulkData.dueDate}
-                  onChange={(e) =>
-                    setBulkData({ ...bulkData, dueDate: e.target.value })
-                  }
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </div>
-
-              {bulkData.society && (
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
-                  <p className="text-xs text-blue-600">
-                    ℹ️ Bills will be generated for all{" "}
-                    <span className="font-bold">occupied flats</span> in{" "}
-                    <span className="font-bold">
-                      {societies.find((s) => s._id === bulkData.society)?.name}
-                    </span>
-                    . Amount will be taken from each flat's maintenance charge.
-                  </p>
                 </div>
-              )}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Due Date *</label>
+                  <input
+                    type="date"
+                    value={bulkData.dueDate}
+                    onChange={(e) => setBulkData({ ...bulkData, dueDate: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowBulkModal(false)}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-medium"
+                  onClick={() => { setShowBulkModal(false); setBulkData({ society: "", month: "", billType: "maintenance", dueDate: "" }); }}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 transition"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Generate Bills
+                  {submitting ? "Generating..." : "Generate All Bills"}
                 </button>
               </div>
             </form>

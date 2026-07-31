@@ -14,7 +14,6 @@ import {
   FaCity,
 } from "react-icons/fa";
 
-const API_URL = "https://apartment-backend.onrender.com/api/v1";
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState({
