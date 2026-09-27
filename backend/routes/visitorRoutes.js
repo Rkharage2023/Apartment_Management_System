@@ -46,7 +46,7 @@ router.post("/", protect, authorize("resident"), async (req, res) => {
 // @desc    Security registers a walk-in visitor
 // @access  Security only
 // ─────────────────────────────────────────
-router.post("/walkin", protect, authorize("security"), async (req, res) => {
+router.post("/walkin", protect, authorize("security", "admin"), async (req, res) => {
   try {
     const { name, phone, purpose, society, flat, host, vehicleNumber, note } =
       req.body;
@@ -84,7 +84,7 @@ router.post("/walkin", protect, authorize("security"), async (req, res) => {
 // @desc    Admin gets all visitors
 // @access  Admin only
 // ─────────────────────────────────────────
-router.get("/", protect, authorize("admin"), async (req, res) => {
+router.get("/", protect, authorize("admin", "security"), async (req, res) => {
   try {
     const { society, purpose, approvalStatus } = req.query;
 
@@ -252,7 +252,7 @@ router.put(
 // @desc    Admin blacklists a visitor
 // @access  Admin only
 // ─────────────────────────────────────────
-router.put("/:id/blacklist", protect, authorize("admin"), async (req, res) => {
+router.put("/:id/blacklist", protect, authorize("admin", "security"), async (req, res) => {
   try {
     const visitor = await Visitor.findById(req.params.id);
 

@@ -21,6 +21,10 @@ const societySchema = new mongoose.Schema(
       type: Number,
       default: 1,
     },
+    flatsPerFloor: {
+      type: Number,
+      default: 4,
+    },
     amenities: {
       type: [String],
       default: [],

@@ -2,14 +2,29 @@ import { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import API from "../../api/axios";
 import toast from "react-hot-toast";
-import { FaUserFriends, FaBan, FaSignOutAlt, FaSignInAlt, FaSearch, FaTrash } from "react-icons/fa";
+import { FaUserFriends, FaBan, FaSignOutAlt, FaSignInAlt, FaSearch, FaTrash, FaPlus } from "react-icons/fa";
 
 const Visitors = () => {
   const [visitors, setVisitors] = useState([]);
+  const [societies, setSocieties] = useState([]);
+  const [flats, setFlats] = useState([]);
+  const [residents, setResidents] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showWalkinModal, setShowWalkinModal] = useState(false);
   const [filterPurpose, setFilterPurpose] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [walkinData, setWalkinData] = useState({
+    name: "",
+    phone: "",
+    purpose: "guest",
+    society: "",
+    flat: "",
+    host: "",
+    vehicleNumber: "",
+    note: "",
+  });
 
   const fetchVisitors = async () => {
     try {
@@ -26,9 +41,53 @@ const Visitors = () => {
     }
   };
 
+  const fetchDependencies = async () => {
+    try {
+      const [socRes, flatRes, resRes] = await Promise.all([
+        API.get("/societies"),
+        API.get("/flats"),
+        API.get("/users?role=resident"),
+      ]);
+      setSocieties(socRes.data.societies || []);
+      setFlats(flatRes.data.flats || []);
+      setResidents(resRes.data.users || []);
+
+      if (socRes.data.societies?.length > 0) {
+        setWalkinData((prev) => ({ ...prev, society: socRes.data.societies[0]._id }));
+      }
+    } catch (error) {}
+  };
+
   useEffect(() => {
     fetchVisitors();
+    fetchDependencies();
   }, [filterPurpose, filterStatus]);
+
+  const handleWalkinSubmit = async (e) => {
+    e.preventDefault();
+    if (!walkinData.name || !walkinData.phone || !walkinData.society || !walkinData.flat || !walkinData.host) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+    try {
+      await API.post("/visitors/walkin", walkinData);
+      toast.success("Walk-in visitor registered and checked in");
+      setShowWalkinModal(false);
+      setWalkinData({
+        name: "",
+        phone: "",
+        purpose: "guest",
+        society: societies[0]?._id || "",
+        flat: "",
+        host: "",
+        vehicleNumber: "",
+        note: "",
+      });
+      fetchVisitors();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to register walk-in visitor");
+    }
+  };
 
   const handleCheckIn = async (id) => {
     try {
@@ -110,6 +169,12 @@ const Visitors = () => {
             Real-time gate pass monitoring, visitor check-in/check-out logs, and blacklist controls
           </p>
         </div>
+        <button
+          onClick={() => setShowWalkinModal(true)}
+          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-xs"
+        >
+          <FaPlus /> Register Walk-In Visitor
+        </button>
       </div>
 
       {/* Search + Filters */}
@@ -277,6 +342,159 @@ const Visitors = () => {
           </div>
         )}
       </div>
+      {/* Walk-In Visitor Modal */}
+      {showWalkinModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-gray-100 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Register Walk-In Visitor</h2>
+            <form onSubmit={handleWalkinSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Visitor Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rahul Sharma"
+                  value={walkinData.name}
+                  onChange={(e) => setWalkinData({ ...walkinData, name: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Phone Number *</label>
+                  <input
+                    type="tel"
+                    required
+                    maxLength={10}
+                    placeholder="10-digit mobile"
+                    value={walkinData.phone}
+                    onChange={(e) => setWalkinData({ ...walkinData, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Purpose *</label>
+                  <select
+                    value={walkinData.purpose}
+                    onChange={(e) => setWalkinData({ ...walkinData, purpose: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    {["guest", "delivery", "maintenance", "cab", "medical", "other"].map((p) => (
+                      <option key={p} value={p}>
+                        {p.charAt(0).toUpperCase() + p.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Society *</label>
+                <select
+                  required
+                  value={walkinData.society}
+                  onChange={(e) => setWalkinData({ ...walkinData, society: e.target.value, flat: "", host: "" })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Select Society</option>
+                  {societies.map((s) => (
+                    <option key={s._id} value={s._id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Flat *</label>
+                  <select
+                    required
+                    value={walkinData.flat}
+                    onChange={(e) => {
+                      const selectedFlatId = e.target.value;
+                      const selectedFlat = flats.find((f) => f._id === selectedFlatId);
+                      const defaultHost = selectedFlat?.currentTenant?._id || selectedFlat?.owner?._id || walkinData.host;
+                      setWalkinData({
+                        ...walkinData,
+                        flat: selectedFlatId,
+                        host: defaultHost,
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">Select Flat</option>
+                    {flats
+                      .filter((f) => !walkinData.society || f.society?._id === walkinData.society || f.society === walkinData.society)
+                      .map((f) => (
+                        <option key={f._id} value={f._id}>
+                          {f.flatNumber} ({f.block})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Host Resident *</label>
+                  <select
+                    required
+                    value={walkinData.host}
+                    onChange={(e) => setWalkinData({ ...walkinData, host: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">Select Host</option>
+                    {residents.map((r) => (
+                      <option key={r._id} value={r._id}>
+                        {r.name} ({r.phone})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Vehicle No. (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. MH12AB1234"
+                    value={walkinData.vehicleNumber}
+                    onChange={(e) => setWalkinData({ ...walkinData, vehicleNumber: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Notes / Item Details</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Amazon Package"
+                    value={walkinData.note}
+                    onChange={(e) => setWalkinData({ ...walkinData, note: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowWalkinModal(false)}
+                  className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-medium transition"
+                >
+                  Check In Visitor
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 };

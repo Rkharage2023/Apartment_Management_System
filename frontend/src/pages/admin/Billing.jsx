@@ -121,16 +121,18 @@ const Billing = () => {
     fetchResidents();
   }, [filterStatus, filterMonth]);
 
+const getRefId = (ref) => {
+  if (!ref) return "";
+  if (typeof ref === "string") return ref;
+  if (typeof ref === "object" && ref._id) return ref._id.toString();
+  return "";
+};
+
   const handleFlatChange = (flatId) => {
     const selectedFlat = flats.find((f) => f._id === flatId);
     if (selectedFlat) {
-      const societyId = selectedFlat.society?._id || selectedFlat.society || "";
-      const residentId =
-        selectedFlat.owner?._id ||
-        selectedFlat.owner ||
-        selectedFlat.tenant?._id ||
-        selectedFlat.tenant ||
-        "";
+      const societyId = getRefId(selectedFlat.society);
+      const residentId = getRefId(selectedFlat.owner) || getRefId(selectedFlat.tenant);
 
       const amount =
         formData.billType === "maintenance"
@@ -147,7 +149,7 @@ const Billing = () => {
         amount: amount || prev.amount,
       }));
     } else {
-      setFormData((prev) => ({ ...prev, flat: flatId }));
+      setFormData((prev) => ({ ...prev, flat: flatId, society: "", resident: "" }));
     }
   };
 
@@ -169,7 +171,7 @@ const Billing = () => {
   const handleCreateBill = async (e) => {
     e.preventDefault();
     if (!formData.flat) { toast.error("Please select a flat"); return; }
-    if (!formData.resident) { toast.error("This flat has no owner/tenant assigned. Cannot bill."); return; }
+    if (!formData.resident) { toast.error("Please select a resident to bill"); return; }
     if (!formData.amount || Number(formData.amount) <= 0) { toast.error("Please enter a valid amount"); return; }
     if (!formData.month) { toast.error("Please select a billing month"); return; }
     if (!formData.dueDate) { toast.error("Please select a due date"); return; }
@@ -504,13 +506,38 @@ const Billing = () => {
                   onChange={(e) => handleFlatChange(e.target.value)}
                   className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">-- Select Occupied Flat --</option>
-                  {flats.map((f) => (
-                    <option key={f._id} value={f._id}>
-                      Flat {f.flatNumber} (Block {f.block}) — {f.owner?.name || f.tenant?.name || "Occupied"}
+                  <option value="">-- Select Flat --</option>
+                  {flats.map((f) => {
+                    const residentName = f.owner?.name || f.tenant?.name;
+                    return (
+                      <option key={f._id} value={f._id}>
+                        Flat {f.flatNumber} (Block {f.block}) {residentName ? `— ${residentName}` : "— (Vacant / Unassigned)"}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Select Resident *</label>
+                <select
+                  value={formData.resident}
+                  onChange={(e) => setFormData({ ...formData, resident: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">-- Select Resident --</option>
+                  {residents.map((r) => (
+                    <option key={r._id} value={r._id}>
+                      {r.name} ({r.email || r.phone || "Resident"})
                     </option>
                   ))}
                 </select>
+                {formData.flat && !formData.resident && (
+                  <p className="text-xs text-amber-600 mt-1 flex items-center gap-1 font-medium">
+                    <FaExclamationTriangle className="text-amber-500 shrink-0" />
+                    This flat has no assigned owner/tenant on record. Please select a resident above to bill.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -541,14 +568,6 @@ const Billing = () => {
                 </div>
               </div>
 
-              {/* Resident warning */}
-              {formData.flat && !formData.resident && (
-                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl px-4 py-2.5 text-xs font-semibold">
-                  <FaExclamationTriangle />
-                  This flat has no owner or tenant assigned. Assign a resident to the flat first before billing.
-                </div>
-              )}
-
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Due Date *</label>
                 <input
@@ -569,7 +588,7 @@ const Billing = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || !formData.resident}
+                  disabled={submitting || !formData.flat || !formData.resident}
                   className="flex-1 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? "Creating..." : "Create Bill"}

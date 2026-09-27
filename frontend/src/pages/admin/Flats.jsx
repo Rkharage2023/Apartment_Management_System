@@ -28,6 +28,60 @@ const Flats = () => {
     parkingSlot: "",
   });
 
+  // Helper to generate society acronym (e.g. "Green Valley Society" -> "GVS")
+  const getSocietyAcronym = (name) => {
+    if (!name) return "FLAT";
+    return name
+      .trim()
+      .split(/\s+/)
+      .map((word) => word[0]?.toUpperCase() || "")
+      .join("");
+  };
+
+  // Selected society & calculated available blocks and flat numbers
+  const selectedSocietyObj = societies.find((s) => s._id === formData.society);
+  const totalBlocksForSelected = selectedSocietyObj?.totalBlocks || 1;
+  const availableBlocks = Array.from(
+    { length: totalBlocksForSelected },
+    (_, i) => String.fromCharCode(65 + i)
+  );
+
+  const societyAcronym = getSocietyAcronym(selectedSocietyObj?.name);
+  const totalFlatsCount = selectedSocietyObj?.totalFlats || 10;
+  const availableFlatNumbers = Array.from(
+    { length: totalFlatsCount },
+    (_, i) => `${societyAcronym}-${String(i + 1).padStart(2, "0")}`
+  );
+
+  // BHK Type presets for Rent and Maintenance (Idea 3)
+  const BHK_PRESETS = {
+    "1BHK": { rent: 8000, maintenance: 1500 },
+    "2BHK": { rent: 12000, maintenance: 2000 },
+    "3BHK": { rent: 18000, maintenance: 3000 },
+    "4BHK": { rent: 25000, maintenance: 4000 },
+    Penthouse: { rent: 40000, maintenance: 6000 },
+  };
+
+  // Calculate floor based on flat index & society flatsPerFloor
+  const calcFloorForFlatNumber = (flatNum, availableList, fpf = 4) => {
+    const idx = availableList.indexOf(flatNum);
+    if (idx === -1) return 1;
+    const perFloor = Number(fpf) || 4;
+    return Math.floor(idx / perFloor) + 1;
+  };
+
+  // Auto-select BHK type based on flat position on floor (Idea 1)
+  const calcBHKForFlatNumber = (flatNum, availableList, fpf = 4) => {
+    const idx = availableList.indexOf(flatNum);
+    if (idx === -1) return "2BHK";
+    const perFloor = Number(fpf) || 4;
+    const posOnFloor = idx % perFloor;
+    if (posOnFloor === 0 || posOnFloor === 1) return "2BHK";
+    if (posOnFloor === 2) return "3BHK";
+    if (posOnFloor === 3) return "4BHK";
+    return "Penthouse";
+  };
+
   const fetchFlats = async () => {
     try {
       setLoading(true);
@@ -44,7 +98,31 @@ const Flats = () => {
   const fetchSocieties = async () => {
     try {
       const res = await API.get("/societies");
-      setSocieties(res.data.societies);
+      const list = res.data.societies || [];
+      setSocieties(list);
+      if (list.length > 0) {
+        const firstSoc = list[0];
+        const acr = getSocietyAcronym(firstSoc?.name);
+        const firstFlatNum = `${acr}-01`;
+        const totalCount = firstSoc?.totalFlats || 10;
+        const initialFlatList = Array.from(
+          { length: totalCount },
+          (_, i) => `${acr}-${String(i + 1).padStart(2, "0")}`
+        );
+        const autoFloor = calcFloorForFlatNumber(firstFlatNum, initialFlatList, firstSoc?.flatsPerFloor);
+        const autoType = calcBHKForFlatNumber(firstFlatNum, initialFlatList, firstSoc?.flatsPerFloor);
+        const preset = BHK_PRESETS[autoType] || BHK_PRESETS["2BHK"];
+
+        setFormData((prev) => ({
+          ...prev,
+          society: prev.society || firstSoc._id,
+          flatNumber: prev.flatNumber || firstFlatNum,
+          floor: prev.floor || autoFloor,
+          type: prev.type || autoType,
+          monthlyRent: prev.monthlyRent || preset.rent,
+          maintenanceCharge: prev.maintenanceCharge || preset.maintenance,
+        }));
+      }
     } catch (error) {}
   };
 
@@ -62,18 +140,81 @@ const Flats = () => {
   }, [filterStatus]);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === "society") {
+      const soc = societies.find((s) => s._id === value);
+      const blocks = Array.from(
+        { length: soc?.totalBlocks || 1 },
+        (_, i) => String.fromCharCode(65 + i)
+      );
+      const acr = getSocietyAcronym(soc?.name);
+      const totalCount = soc?.totalFlats || 10;
+      const flatNums = Array.from(
+        { length: totalCount },
+        (_, i) => `${acr}-${String(i + 1).padStart(2, "0")}`
+      );
+      const targetFlatNum = flatNums.includes(formData.flatNumber) ? formData.flatNumber : flatNums[0] || "";
+      const autoFloor = calcFloorForFlatNumber(targetFlatNum, flatNums, soc?.flatsPerFloor);
+      const autoType = calcBHKForFlatNumber(targetFlatNum, flatNums, soc?.flatsPerFloor);
+      const preset = BHK_PRESETS[autoType] || BHK_PRESETS["2BHK"];
+
+      setFormData({
+        ...formData,
+        society: value,
+        block: blocks.includes(formData.block) ? formData.block : blocks[0] || "A",
+        flatNumber: targetFlatNum,
+        floor: autoFloor,
+        type: autoType,
+        monthlyRent: preset.rent,
+        maintenanceCharge: preset.maintenance,
+      });
+    } else if (name === "flatNumber") {
+      const autoFloor = calcFloorForFlatNumber(value, availableFlatNumbers, selectedSocietyObj?.flatsPerFloor);
+      const autoType = calcBHKForFlatNumber(value, availableFlatNumbers, selectedSocietyObj?.flatsPerFloor);
+      const preset = BHK_PRESETS[autoType] || BHK_PRESETS["2BHK"];
+
+      setFormData({
+        ...formData,
+        flatNumber: value,
+        floor: autoFloor,
+        type: autoType,
+        monthlyRent: preset.rent,
+        maintenanceCharge: preset.maintenance,
+      });
+    } else if (name === "type") {
+      const preset = BHK_PRESETS[value];
+      setFormData({
+        ...formData,
+        type: value,
+        monthlyRent: preset ? preset.rent : formData.monthlyRent,
+        maintenanceCharge: preset ? preset.maintenance : formData.maintenanceCharge,
+      });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const resetForm = () => {
+    const firstSoc = societies[0];
+    const acr = getSocietyAcronym(firstSoc?.name);
+    const firstFlatNum = `${acr || "FLAT"}-01`;
+    const totalCount = firstSoc?.totalFlats || 10;
+    const initialFlatList = Array.from(
+      { length: totalCount },
+      (_, i) => `${acr || "FLAT"}-${String(i + 1).padStart(2, "0")}`
+    );
+    const autoFloor = calcFloorForFlatNumber(firstFlatNum, initialFlatList, firstSoc?.flatsPerFloor);
+    const autoType = calcBHKForFlatNumber(firstFlatNum, initialFlatList, firstSoc?.flatsPerFloor);
+    const preset = BHK_PRESETS[autoType] || BHK_PRESETS["2BHK"];
+
     setFormData({
-      society: "",
-      flatNumber: "",
+      society: firstSoc?._id || "",
+      flatNumber: firstFlatNum,
       block: "A",
-      floor: "",
-      type: "2BHK",
-      monthlyRent: "",
-      maintenanceCharge: "",
+      floor: autoFloor,
+      type: autoType,
+      monthlyRent: preset.rent,
+      maintenanceCharge: preset.maintenance,
       parkingSlot: "",
     });
   };
@@ -343,7 +484,6 @@ const Flats = () => {
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">Select Society</option>
                   {societies.map((s) => (
                     <option key={s._id} value={s._id}>
                       {s.name}
@@ -352,33 +492,47 @@ const Flats = () => {
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Flat Number *
+                    Select Flat (Flat No · Floor · BHK Type) *
                   </label>
-                  <input
+                  <select
                     name="flatNumber"
                     value={formData.flatNumber}
                     onChange={handleChange}
-                    placeholder="A-101"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 bg-gray-50/50"
+                  >
+                    {availableFlatNumbers.map((fn) => {
+                      const autoFloor = calcFloorForFlatNumber(fn, availableFlatNumbers, selectedSocietyObj?.flatsPerFloor);
+                      const autoType = calcBHKForFlatNumber(fn, availableFlatNumbers, selectedSocietyObj?.flatsPerFloor);
+                      return (
+                        <option key={fn} value={fn}>
+                          {fn}  ·  Floor {autoFloor}  ·  {autoType}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Block
+                    Block *
                   </label>
-                  <input
+                  <select
                     name="block"
                     value={formData.block}
                     onChange={handleChange}
-                    placeholder="A"
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
+                  >
+                    {availableBlocks.map((b) => (
+                      <option key={b} value={b}>
+                        Block {b}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Floor *
+                    Floor No *
                   </label>
                   <input
                     name="floor"
@@ -391,7 +545,7 @@ const Flats = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Type *
+                    BHK Type *
                   </label>
                   <select
                     name="type"

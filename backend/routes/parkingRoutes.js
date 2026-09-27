@@ -52,7 +52,7 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
 // @desc    Get all parking slots — filter by status/type
 // @access  Admin only
 // ─────────────────────────────────────────
-router.get("/", protect, authorize("admin"), async (req, res) => {
+router.get("/", protect, authorize("admin", "security", "staff"), async (req, res) => {
   try {
     const { status, slotType, society } = req.query;
 

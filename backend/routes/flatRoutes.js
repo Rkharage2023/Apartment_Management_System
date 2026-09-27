@@ -30,6 +30,25 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
         .json({ message: "Please fill all required fields" });
     }
 
+    // Check society & validate block against totalBlocks
+    const Society = (await import("../models/Society.js")).default;
+    const societyDoc = await Society.findById(society);
+    if (!societyDoc) {
+      return res.status(404).json({ message: "Selected society not found" });
+    }
+
+    const maxAllowedBlocks = societyDoc.totalBlocks || 1;
+    const allowedBlockList = Array.from({ length: maxAllowedBlocks }, (_, i) => String.fromCharCode(65 + i));
+    const targetBlock = (block || "A").toUpperCase();
+
+    if (!allowedBlockList.includes(targetBlock)) {
+      const lastBlockChar = String.fromCharCode(64 + maxAllowedBlocks);
+      const rangeStr = maxAllowedBlocks === 1 ? "Block A" : `Block A to Block ${lastBlockChar}`;
+      return res.status(400).json({
+        message: `Invalid Block '${block}'. Society '${societyDoc.name}' only has ${maxAllowedBlocks} block(s) (${rangeStr}).`,
+      });
+    }
+
     // Check duplicate flat in same society
     const flatExists = await Flat.findOne({ society, flatNumber });
     if (flatExists) {
@@ -41,7 +60,7 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
     const flat = await Flat.create({
       society,
       flatNumber,
-      block: block || "A",
+      block: targetBlock,
       floor,
       type,
       monthlyRent: monthlyRent || 0,
@@ -60,7 +79,7 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
 // @desc    Get all flats — filter by status/block
 // @access  Admin only
 // ─────────────────────────────────────────
-router.get("/", protect, authorize("admin"), async (req, res) => {
+router.get("/", protect, async (req, res) => {
   try {
     const { status, block, society } = req.query;
 

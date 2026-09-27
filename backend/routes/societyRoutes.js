@@ -13,7 +13,7 @@ const router = express.Router();
 // ─────────────────────────────────────────
 router.post("/", protect, authorize("admin"), async (req, res) => {
   try {
-    const { name, address, totalFlats, totalBlocks, amenities } = req.body;
+    const { name, address, totalFlats, totalBlocks, flatsPerFloor, amenities } = req.body;
 
     if (!name || !address || !totalFlats) {
       return res
@@ -26,6 +26,7 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
       address,
       totalFlats,
       totalBlocks: totalBlocks || 1,
+      flatsPerFloor: flatsPerFloor || 4,
       amenities: amenities || [],
       createdBy: req.user._id,
     });
@@ -44,7 +45,7 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
 // @desc    Get all societies
 // @access  Admin only
 // ─────────────────────────────────────────
-router.get("/", protect, authorize("admin"), async (req, res) => {
+router.get("/", protect, async (req, res) => {
   try {
     const societies = await Society.find().populate("createdBy", "name email");
     res.json({ count: societies.length, societies });
@@ -88,13 +89,14 @@ router.put("/:id", protect, authorize("admin"), async (req, res) => {
       return res.status(404).json({ message: "Society not found" });
     }
 
-    const { name, address, totalFlats, totalBlocks, amenities, isActive } =
+    const { name, address, totalFlats, totalBlocks, flatsPerFloor, amenities, isActive } =
       req.body;
 
     society.name = name || society.name;
     society.address = address || society.address;
     society.totalFlats = totalFlats || society.totalFlats;
     society.totalBlocks = totalBlocks || society.totalBlocks;
+    society.flatsPerFloor = flatsPerFloor || society.flatsPerFloor;
     society.amenities = amenities || society.amenities;
     society.isActive = isActive !== undefined ? isActive : society.isActive;
 

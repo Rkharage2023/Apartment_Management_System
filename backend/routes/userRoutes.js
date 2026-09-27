@@ -6,7 +6,7 @@ import authorize from "../middleware/roleMiddleware.js";
 const router = express.Router();
 
 // Get all users
-router.get("/", protect, authorize("admin"), async (req, res) => {
+router.get("/", protect, authorize("admin", "security", "staff"), async (req, res) => {
   try {
     const { role } = req.query;
     const filter = {};

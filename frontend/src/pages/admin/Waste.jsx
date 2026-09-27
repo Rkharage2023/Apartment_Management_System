@@ -75,10 +75,20 @@ const Waste = () => {
     }
   };
 
+  const handleMarkCollected = async (id) => {
+    try {
+      await API.put(`/waste/${id}/collect`);
+      toast.success("Waste marked as collected");
+      fetchLogs();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to mark as collected");
+    }
+  };
+
   const handleMarkMissed = async (id) => {
     try {
       await API.put(`/waste/${id}/miss`, {
-        missedReason: "Marked by admin",
+        missedReason: "Marked by staff/admin",
       });
       toast.success("Marked as missed");
       fetchLogs();
@@ -245,12 +255,20 @@ const Waste = () => {
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
                         {l.status === "pending" && (
-                          <button
-                            onClick={() => handleMarkMissed(l._id)}
-                            className="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition font-medium"
-                          >
-                            Miss
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleMarkCollected(l._id)}
+                              className="text-xs px-3 py-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition font-medium"
+                            >
+                              Collect
+                            </button>
+                            <button
+                              onClick={() => handleMarkMissed(l._id)}
+                              className="text-xs px-3 py-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition font-medium"
+                            >
+                              Miss
+                            </button>
+                          </>
                         )}
                         <button
                           onClick={() => handleDelete(l._id)}

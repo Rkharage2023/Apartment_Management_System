@@ -14,13 +14,33 @@ const router = express.Router();
 // ─────────────────────────────────────────
 router.post("/", protect, authorize("admin"), async (req, res) => {
   try {
-    const { flat, society, resident, billType, amount, dueDate, month, note } =
+    let { flat, society, resident, billType, amount, dueDate, month, note } =
       req.body;
 
-    // Validate each required field individually for clear error messages
+    // Validate flat field
     if (!flat) return res.status(400).json({ message: "Please select a flat" });
+
+    // Fetch flat document to auto-populate society/resident if missing
+    const flatDoc = await Flat.findById(flat).populate("owner tenant society");
+    if (!flatDoc) {
+      return res.status(404).json({ message: "Selected flat not found" });
+    }
+
+    // Fallback society if not passed
+    if (!society && flatDoc.society) {
+      society = flatDoc.society._id ? flatDoc.society._id.toString() : flatDoc.society.toString();
+    }
+
+    // Fallback resident if not passed
+    if (!resident) {
+      const resUser = flatDoc.owner || flatDoc.tenant;
+      if (resUser) {
+        resident = resUser._id ? resUser._id.toString() : resUser.toString();
+      }
+    }
+
     if (!society) return res.status(400).json({ message: "Society is required (select a flat first)" });
-    if (!resident || resident === "") return res.status(400).json({ message: "Resident not found for this flat. Please ensure the flat has an owner or tenant assigned." });
+    if (!resident || resident === "") return res.status(400).json({ message: "Resident not found for this flat. Please select a resident or assign an owner/tenant to the flat." });
     if (!amount || Number(amount) <= 0) return res.status(400).json({ message: "Please enter a valid amount" });
     if (!month) return res.status(400).json({ message: "Please select a billing month" });
     if (!dueDate) return res.status(400).json({ message: "Please select a due date" });

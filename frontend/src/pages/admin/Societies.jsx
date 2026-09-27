@@ -17,6 +17,7 @@ const Societies = () => {
     pincode: "",
     totalFlats: "",
     totalBlocks: "",
+    flatsPerFloor: "4",
     amenities: "",
   });
 
@@ -49,6 +50,7 @@ const Societies = () => {
       pincode: "",
       totalFlats: "",
       totalBlocks: "",
+      flatsPerFloor: "4",
       amenities: "",
     });
     setEditData(null);
@@ -65,6 +67,7 @@ const Societies = () => {
         pincode: society.address.pincode,
         totalFlats: society.totalFlats,
         totalBlocks: society.totalBlocks,
+        flatsPerFloor: society.flatsPerFloor || 4,
         amenities: society.amenities.join(", "),
       });
     } else {
@@ -90,6 +93,7 @@ const Societies = () => {
       },
       totalFlats: Number(formData.totalFlats),
       totalBlocks: Number(formData.totalBlocks),
+      flatsPerFloor: Number(formData.flatsPerFloor || 4),
       amenities: formData.amenities
         .split(",")
         .map((a) => a.trim())
@@ -302,7 +306,7 @@ const Societies = () => {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Total Flats *
@@ -326,6 +330,19 @@ const Societies = () => {
                     value={formData.totalBlocks}
                     onChange={handleChange}
                     placeholder="3"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Flats/Floor
+                  </label>
+                  <input
+                    name="flatsPerFloor"
+                    type="number"
+                    value={formData.flatsPerFloor}
+                    onChange={handleChange}
+                    placeholder="4"
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </div>

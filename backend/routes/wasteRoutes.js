@@ -241,7 +241,7 @@ router.get("/:id", protect, authorize("admin"), async (req, res) => {
 // @desc    Staff marks flat as collected
 // @access  Staff only
 // ─────────────────────────────────────────
-router.put("/:id/collect", protect, authorize("staff"), async (req, res) => {
+router.put("/:id/collect", protect, authorize("admin", "staff"), async (req, res) => {
   try {
     const log = await WasteLog.findById(req.params.id);
 

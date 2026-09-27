@@ -58,7 +58,10 @@ const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const { user } = useSelector((state) => state.auth);
 
-  const links = user?.role === "admin" ? adminLinks : residentLinks;
+  const links =
+    user?.role === "admin" || user?.role === "security" || user?.role === "staff"
+      ? adminLinks
+      : residentLinks;
 
   const handleLogout = () => {
     dispatch(logout());

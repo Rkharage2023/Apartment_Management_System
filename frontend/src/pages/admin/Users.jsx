@@ -6,6 +6,7 @@ import { FaUsers, FaPlus, FaSearch, FaTrash, FaEdit, FaCheckCircle, FaTimesCircl
 
 const Users = () => {
   const [users, setUsers] = useState([]);
+  const [societies, setSocieties] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filterRole, setFilterRole] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -20,6 +21,7 @@ const Users = () => {
     password: "",
     phone: "",
     role: "resident",
+    society: "",
     flatNumber: "",
     isVerified: true,
   });
@@ -37,18 +39,27 @@ const Users = () => {
     }
   };
 
+  const fetchSocieties = async () => {
+    try {
+      const res = await API.get("/societies");
+      setSocieties(res.data.societies || []);
+    } catch (error) {}
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchSocieties();
   }, [filterRole]);
 
-  const handleOpenCreate = () => {
+  const handleOpenCreate = (defaultRole = "resident") => {
     setEditingUser(null);
     setFormData({
       name: "",
       email: "",
       password: "",
       phone: "",
-      role: "resident",
+      role: defaultRole,
+      society: societies[0]?._id || "",
       flatNumber: "",
       isVerified: true,
     });
@@ -63,6 +74,7 @@ const Users = () => {
       password: "",
       phone: u.phone || "",
       role: u.role || "resident",
+      society: u.society?._id || u.society || "",
       flatNumber: u.flatNumber || "",
       isVerified: u.isVerified ?? true,
     });
@@ -161,7 +173,7 @@ const Users = () => {
   return (
     <DashboardLayout>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <FaUsers className="text-primary-600" /> Users & Staff Management
@@ -170,12 +182,26 @@ const Users = () => {
             Manage system roles, security officers, maintenance staff, and residents — {users.length} total accounts
           </p>
         </div>
-        <button
-          onClick={handleOpenCreate}
-          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-sm hover:shadow"
-        >
-          <FaPlus /> Add New User / Staff
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => handleOpenCreate("security")}
+            className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-semibold transition shadow-xs"
+          >
+            <FaUserShield /> + Add Security
+          </button>
+          <button
+            onClick={() => handleOpenCreate("staff")}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-semibold transition shadow-xs"
+          >
+            <FaUserTie /> + Add Staff
+          </button>
+          <button
+            onClick={() => handleOpenCreate("resident")}
+            className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-semibold transition shadow-xs"
+          >
+            <FaPlus /> + Add Resident
+          </button>
+        </div>
       </div>
 
       {/* Summary Role Cards */}
@@ -244,7 +270,7 @@ const Users = () => {
                 <tr>
                   <th className="text-left px-6 py-4 text-gray-500 font-medium">User Profile</th>
                   <th className="text-left px-6 py-4 text-gray-500 font-medium">Contact</th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">Flat No</th>
+                  <th className="text-left px-6 py-4 text-gray-500 font-medium">Flat / Unit</th>
                   <th className="text-left px-6 py-4 text-gray-500 font-medium">Role</th>
                   <th className="text-left px-6 py-4 text-gray-500 font-medium">Verification</th>
                   <th className="text-left px-6 py-4 text-gray-500 font-medium">Actions</th>
@@ -343,7 +369,7 @@ const Users = () => {
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
             <div className="p-6 border-b border-gray-100 bg-gray-50">
               <h2 className="text-lg font-bold text-gray-800">
-                {editingUser ? "Edit User Account" : "Create New User / Staff Account"}
+                {editingUser ? "Edit User Account" : `Create ${formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} Account`}
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
                 {editingUser
@@ -364,10 +390,12 @@ const Users = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Phone Number</label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Phone Number (10 digits)</label>
                   <input
+                    type="tel"
+                    maxLength={10}
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
                     placeholder="e.g. 9876543210"
                     className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
@@ -415,15 +443,33 @@ const Users = () => {
                   </select>
                 </div>
                 <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Assigned Society</label>
+                  <select
+                    value={formData.society}
+                    onChange={(e) => setFormData({ ...formData, society: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">Select Society</option>
+                    {societies.map((s) => (
+                      <option key={s._id} value={s._id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {formData.role === "resident" && (
+                <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Flat / Unit Number</label>
                   <input
                     value={formData.flatNumber}
                     onChange={(e) => setFormData({ ...formData, flatNumber: e.target.value })}
-                    placeholder="e.g. A-102"
+                    placeholder="e.g. GVS-01"
                     className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </div>
-              </div>
+              )}
 
               <div className="flex items-center gap-2 pt-2">
                 <input
@@ -451,7 +497,7 @@ const Users = () => {
                   disabled={submitLoading}
                   className="flex-1 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition disabled:opacity-50 shadow-sm"
                 >
-                  {submitLoading ? "Saving..." : editingUser ? "Update User" : "Create Account"}
+                  {submitLoading ? "Saving..." : editingUser ? "Update Account" : "Create Account"}
                 </button>
               </div>
             </form>

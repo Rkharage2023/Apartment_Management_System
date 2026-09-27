@@ -43,7 +43,7 @@ router.post("/", protect, authorize("resident"), async (req, res) => {
 // @desc    Admin gets all complaints — filter by status/category/priority
 // @access  Admin only
 // ─────────────────────────────────────────
-router.get("/", protect, authorize("admin"), async (req, res) => {
+router.get("/", protect, authorize("admin", "staff", "security"), async (req, res) => {
   try {
     const { status, category, priority, society } = req.query;
 
