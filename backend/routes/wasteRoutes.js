@@ -75,10 +75,10 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
 
 // ─────────────────────────────────────────
 // @route   GET /api/v1/waste
-// @desc    Admin gets all waste logs — filter by date/status
-// @access  Admin only
+// @desc    Admin & Staff gets all waste logs — filter by date/status
+// @access  Admin & Staff
 // ─────────────────────────────────────────
-router.get("/", protect, authorize("admin"), async (req, res) => {
+router.get("/", protect, authorize("admin", "staff"), async (req, res) => {
   try {
     const { society, status, date, wasteType } = req.query;
 
@@ -134,9 +134,9 @@ router.get("/my-logs", protect, authorize("resident"), async (req, res) => {
 // ─────────────────────────────────────────
 // @route   GET /api/v1/waste/missed
 // @desc    Get all missed collections
-// @access  Admin only
+// @access  Admin & Staff
 // ─────────────────────────────────────────
-router.get("/missed", protect, authorize("admin"), async (req, res) => {
+router.get("/missed", protect, authorize("admin", "staff"), async (req, res) => {
   try {
     const { society, date } = req.query;
 
@@ -165,9 +165,9 @@ router.get("/missed", protect, authorize("admin"), async (req, res) => {
 // ─────────────────────────────────────────
 // @route   GET /api/v1/waste/analytics
 // @desc    Get collection analytics for a society
-// @access  Admin only
+// @access  Admin & Staff
 // ─────────────────────────────────────────
-router.get("/analytics", protect, authorize("admin"), async (req, res) => {
+router.get("/analytics", protect, authorize("admin", "staff"), async (req, res) => {
   try {
     const { society, date } = req.query;
 
@@ -216,9 +216,9 @@ router.get("/analytics", protect, authorize("admin"), async (req, res) => {
 // ─────────────────────────────────────────
 // @route   GET /api/v1/waste/:id
 // @desc    Get single waste log
-// @access  Admin only
+// @access  Admin & Staff
 // ─────────────────────────────────────────
-router.get("/:id", protect, authorize("admin"), async (req, res) => {
+router.get("/:id", protect, authorize("admin", "staff"), async (req, res) => {
   try {
     const log = await WasteLog.findById(req.params.id)
       .populate("flat", "flatNumber block floor")

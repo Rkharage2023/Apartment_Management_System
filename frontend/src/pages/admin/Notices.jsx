@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import API from "../../api/axios";
 import toast from "react-hot-toast";
 import { FaPlus, FaBullhorn, FaEdit, FaTrash } from "react-icons/fa";
 
-
 const Notices = () => {
+  const { user } = useSelector((state) => state.auth);
   const [notices, setNotices] = useState([]);
   const [societies, setSocieties] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -35,7 +36,11 @@ const Notices = () => {
   const fetchSocieties = async () => {
     try {
       const res = await API.get(`/societies`);
-      setSocieties(res.data.societies);
+      const list = res.data.societies || [];
+      setSocieties(list);
+      if (list.length > 0) {
+        setFormData((prev) => ({ ...prev, society: prev.society || list[0]._id }));
+      }
     } catch (error) {}
   };
 
@@ -50,7 +55,7 @@ const Notices = () => {
       description: "",
       category: "general",
       priority: "medium",
-      society: "",
+      society: societies[0]?._id || "",
       expiresAt: "",
     });
     setEditData(null);
@@ -128,14 +133,16 @@ const Notices = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Notices</h1>
-          <p className="text-gray-500 text-sm mt-1">Manage society notices</p>
+          <p className="text-gray-500 text-sm mt-1">View and manage society notices</p>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
-        >
-          <FaPlus /> Add Notice
-        </button>
+        {user?.role === "admin" && (
+          <button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
+          >
+            <FaPlus /> Add Notice
+          </button>
+        )}
       </div>
 
       {/* Notices Grid */}
@@ -168,20 +175,22 @@ const Notices = () => {
                     {n.priority}
                   </span>
                 </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => handleOpenModal(n)}
-                    className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition"
-                  >
-                    <FaEdit className="text-xs" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(n._id)}
-                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"
-                  >
-                    <FaTrash className="text-xs" />
-                  </button>
-                </div>
+                {user?.role === "admin" && (
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => handleOpenModal(n)}
+                      className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition"
+                    >
+                      <FaEdit className="text-xs" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(n._id)}
+                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"
+                    >
+                      <FaTrash className="text-xs" />
+                    </button>
+                  </div>
+                )}
               </div>
               <h3 className="font-semibold text-gray-800 mb-2">{n.title}</h3>
               <p className="text-sm text-gray-500 line-clamp-2">
@@ -293,7 +302,6 @@ const Notices = () => {
                   }
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">Select Society</option>
                   {societies.map((s) => (
                     <option key={s._id} value={s._id}>
                       {s.name}

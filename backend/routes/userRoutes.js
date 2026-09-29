@@ -24,24 +24,27 @@ router.get("/", protect, authorize("admin", "security", "staff"), async (req, re
 router.post("/", protect, authorize("admin"), async (req, res) => {
   try {
     const { name, email, password, phone, role, flatNumber, society } = req.body;
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "Name, email, and password are required" });
+    if (!name || !email) {
+      return res.status(400).json({ message: "Name and email are required" });
     }
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ message: "User with this email already exists" });
     }
+
+    const defaultPassword = password && password.trim() ? password.trim() : "Password123";
+
     const user = await User.create({
       name,
       email,
-      password,
+      password: defaultPassword,
       phone: phone || "",
       role: role || "resident",
       flatNumber: flatNumber || "",
       society: society || null,
       isVerified: true,
     });
-    res.status(201).json({ message: "User created successfully", user });
+    res.status(201).json({ message: "User created successfully", user, defaultPassword });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

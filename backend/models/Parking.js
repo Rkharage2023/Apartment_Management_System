@@ -52,6 +52,10 @@ const parkingSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    detailsSubmitted: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true },
 );

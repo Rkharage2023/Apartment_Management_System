@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import API from "../../api/axios";
 import toast from "react-hot-toast";
@@ -43,6 +44,7 @@ const STATUS_FLOW = [
 ];
 
 const Complaints = () => {
+  const { user } = useSelector((state) => state.auth);
   const [complaints, setComplaints] = useState([]);
   const [staffMembers, setStaffMembers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -74,10 +76,7 @@ const Complaints = () => {
   const fetchStaffMembers = async () => {
     try {
       const res = await API.get("/users?role=staff");
-      const staffList = res.data.users || [];
-      const adminListRes = await API.get("/users?role=admin");
-      const adminList = adminListRes.data.users || [];
-      setStaffMembers([...staffList, ...adminList]);
+      setStaffMembers(res.data.users || []);
     } catch (error) {}
   };
 
@@ -352,32 +351,42 @@ const Complaints = () => {
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Staff Assignment Section */}
-              <div className="bg-primary-50/60 border border-primary-100 rounded-xl p-4">
-                <p className="text-xs font-bold text-primary-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <FaUserCog /> Assign Maintenance Staff / Security
-                </p>
-                <div className="flex gap-2">
-                  <select
-                    value={selectedStaffId}
-                    onChange={(e) => setSelectedStaffId(e.target.value)}
-                    className="flex-1 px-3.5 py-2 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="">-- Select Staff Officer --</option>
-                    {staffMembers.map((s) => (
-                      <option key={s._id} value={s._id}>
-                        {s.name} ({s.role.toUpperCase()}) — {s.email}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => handleAssignStaff(selected._id)}
-                    className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl transition"
-                  >
-                    Assign
-                  </button>
+              {/* Staff Assignment Section — Only Admin can assign */}
+              {user?.role === "admin" ? (
+                <div className="bg-primary-50/60 border border-primary-100 rounded-xl p-4">
+                  <p className="text-xs font-bold text-primary-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <FaUserCog /> Assign Maintenance Staff
+                  </p>
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedStaffId}
+                      onChange={(e) => setSelectedStaffId(e.target.value)}
+                      className="flex-1 px-3.5 py-2 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">-- Select Staff Officer --</option>
+                      {staffMembers.map((s) => (
+                        <option key={s._id} value={s._id}>
+                          {s.name} ({s.role.toUpperCase()}) — {s.email}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => handleAssignStaff(selected._id)}
+                      className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl transition"
+                    >
+                      Assign
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-xs flex items-center justify-between">
+                  <span className="font-semibold text-gray-500">Assigned Staff Member:</span>
+                  <span className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                    <FaUserTie className="text-primary-600" />
+                    {selected.assignedTo?.name || "Unassigned"}
+                  </span>
+                </div>
+              )}
 
               {/* Status Management */}
               <div>

@@ -103,11 +103,32 @@ const MyBills = () => {
   const fetchBills = async () => {
     try {
       setLoading(true);
-      let query = "?";
-      if (filterStatus) query += `status=${filterStatus}&`;
-      if (filterMonth) query += `month=${filterMonth}`;
-      const res = await API.get(`/billing/my-bills${query}`);
-      const fetchedBills = res.data.bills;
+      const params = new URLSearchParams();
+      if (filterStatus) params.append("status", filterStatus);
+      if (filterMonth) {
+        // Convert "2026-07" -> "July-2026"
+        const [year, month] = filterMonth.split("-");
+        const monthNames = [
+          "January",
+          "February",
+          "March",
+          "April",
+          "May",
+          "June",
+          "July",
+          "August",
+          "September",
+          "October",
+          "November",
+          "December",
+        ];
+        const formatted = `${monthNames[parseInt(month, 10) - 1]}-${year}`;
+        params.append("month", formatted);
+      }
+
+      const queryString = params.toString() ? `?${params.toString()}` : "";
+      const res = await API.get(`/billing/my-bills${queryString}`);
+      const fetchedBills = res.data.bills || [];
       setBills(fetchedBills);
 
       setSummary({

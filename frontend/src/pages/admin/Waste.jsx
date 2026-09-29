@@ -47,7 +47,11 @@ const Waste = () => {
   const fetchSocieties = async () => {
     try {
       const res = await API.get(`/societies`);
-      setSocieties(res.data.societies);
+      const list = res.data.societies || [];
+      setSocieties(list);
+      if (list.length > 0) {
+        setFormData((prev) => ({ ...prev, society: prev.society || list[0]._id }));
+      }
     } catch (error) {}
   };
 
@@ -310,7 +314,6 @@ const Waste = () => {
                   }
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">Select Society</option>
                   {societies.map((s) => (
                     <option key={s._id} value={s._id}>
                       {s.name}

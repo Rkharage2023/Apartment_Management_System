@@ -57,8 +57,13 @@ const MyVisitors = () => {
       toast.error("Please fill all required fields");
       return;
     }
+    const cleanPhone = formData.phone.replace(/\D/g, "");
+    if (cleanPhone.length !== 10) {
+      toast.error("Phone number must be exactly 10 digits");
+      return;
+    }
     try {
-      await API.post(`/visitors`, formData);
+      await API.post(`/visitors`, { ...formData, phone: cleanPhone });
       toast.success("Visitor pre-approved successfully");
       setShowModal(false);
       setFormData((prev) => ({
@@ -234,16 +239,26 @@ const MyVisitors = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone Number *
+                  Phone Number (10 digits) *
                 </label>
                 <input
+                  type="tel"
+                  maxLength={10}
                   value={formData.phone}
                   onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
+                    setFormData({
+                      ...formData,
+                      phone: e.target.value.replace(/\D/g, "").slice(0, 10),
+                    })
                   }
                   placeholder="9876543210"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
                 />
+                {formData.phone && formData.phone.length < 10 && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Phone number must be 10 digits ({formData.phone.length}/10)
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

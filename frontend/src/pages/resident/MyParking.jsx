@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import API from "../../api/axios";
 import toast from "react-hot-toast";
-import { FaCar, FaBolt } from "react-icons/fa";
-
+import { FaCar, FaBolt, FaLock } from "react-icons/fa";
 
 const MyParking = () => {
   const [slot, setSlot] = useState(null);
@@ -14,6 +13,15 @@ const MyParking = () => {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [releaseLoading, setReleaseLoading] = useState(false);
+
+  const [vehicleData, setVehicleData] = useState({
+    vehicleNumber: "",
+    vehicleType: "four_wheeler",
+    isEVCharging: false,
+    note: "",
+  });
+  const [vehicleSubmitting, setVehicleSubmitting] = useState(false);
+
   const [requestData, setRequestData] = useState({
     slotId: "",
     vehicleNumber: "",
@@ -60,6 +68,24 @@ const MyParking = () => {
     }
   };
 
+  const handleVehicleInfoSubmit = async (e) => {
+    e.preventDefault();
+    if (!vehicleData.vehicleNumber) {
+      toast.error("Please enter vehicle plate number");
+      return;
+    }
+    try {
+      setVehicleSubmitting(true);
+      const res = await API.put("/parking/my-slot/vehicle-info", vehicleData);
+      toast.success(res.data.message || "Vehicle details submitted & locked!");
+      fetchMySlot();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to submit vehicle details");
+    } finally {
+      setVehicleSubmitting(false);
+    }
+  };
+
   const handleRelease = async () => {
     if (!window.confirm("Are you sure you want to release your parking slot? This action cannot be undone.")) return;
     try {
@@ -79,6 +105,14 @@ const MyParking = () => {
       setLoading(true);
       const res = await API.get(`/parking/my-slot`);
       setSlot(res.data.slot);
+      if (res.data.slot) {
+        setVehicleData({
+          vehicleNumber: res.data.slot.vehicleNumber || "",
+          vehicleType: res.data.slot.vehicleType || "four_wheeler",
+          isEVCharging: res.data.slot.isEVCharging || false,
+          note: res.data.slot.note || "",
+        });
+      }
     } catch (error) {
       if (error.response?.status !== 404) {
         toast.error("Failed to fetch parking slot");
@@ -169,6 +203,127 @@ const MyParking = () => {
             </div>
           </div>
 
+          {/* Form to submit details if not yet submitted */}
+          {!slot.detailsSubmitted ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-amber-200 p-6">
+              <div className="flex items-center gap-3 mb-4 text-amber-800">
+                <div className="p-2.5 bg-amber-100 rounded-xl">
+                  <FaCar className="text-xl text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-800">
+                    Submit Vehicle & Parking Information
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Please provide your vehicle details for slot allocation record.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 mb-5 text-xs text-amber-900 flex items-start gap-2">
+                <FaLock className="text-base mt-0.5 text-amber-700 shrink-0" />
+                <div>
+                  <strong className="font-bold">Important Notice:</strong> Once you submit your vehicle information, it will be permanently locked. Only the Society Admin can modify these details afterwards.
+                </div>
+              </div>
+
+              <form onSubmit={handleVehicleInfoSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Vehicle Registration Number *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. MH-12-AB-1234"
+                    value={vehicleData.vehicleNumber}
+                    onChange={(e) =>
+                      setVehicleData({
+                        ...vehicleData,
+                        vehicleNumber: e.target.value.toUpperCase(),
+                      })
+                    }
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Vehicle Type *
+                    </label>
+                    <select
+                      value={vehicleData.vehicleType}
+                      onChange={(e) =>
+                        setVehicleData({
+                          ...vehicleData,
+                          vehicleType: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                    >
+                      <option value="four_wheeler">🚗 4-Wheeler Car</option>
+                      <option value="two_wheeler">🏍️ 2-Wheeler Bike</option>
+                      <option value="ev">⚡ Electric Vehicle</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      EV Charging Facility
+                    </label>
+                    <select
+                      value={vehicleData.isEVCharging ? "yes" : "no"}
+                      onChange={(e) =>
+                        setVehicleData({
+                          ...vehicleData,
+                          isEVCharging: e.target.value === "yes",
+                        })
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                    >
+                      <option value="no">No (Standard Parking)</option>
+                      <option value="yes">Yes ⚡ (EV Charging Needed)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Additional Remarks / Note (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Preferred timing or special request"
+                    value={vehicleData.note}
+                    onChange={(e) =>
+                      setVehicleData({ ...vehicleData, note: e.target.value })
+                    }
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={vehicleSubmitting}
+                  className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-semibold transition shadow-sm disabled:opacity-50"
+                >
+                  {vehicleSubmitting ? "Submitting..." : "Submit & Lock Vehicle Details"}
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between text-xs text-emerald-900 shadow-2xs">
+              <div className="flex items-center gap-2 font-medium">
+                <FaLock className="text-base text-emerald-700 shrink-0" />
+                <span>Vehicle details submitted & locked. Only Society Admin can modify.</span>
+              </div>
+              <span className="px-2.5 py-1 bg-emerald-100 font-semibold rounded-full text-emerald-800">
+                Verified
+              </span>
+            </div>
+          )}
+
           {/* Details Card */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-base font-semibold text-gray-800 mb-4">
@@ -195,7 +350,7 @@ const MyParking = () => {
                 },
                 {
                   label: "Vehicle Type",
-                  value: slot.vehicleType || "Not specified",
+                  value: slot.vehicleType ? slot.vehicleType.replace("_", " ") : "Not specified",
                 },
                 {
                   label: "Society",

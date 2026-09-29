@@ -77,40 +77,111 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
 
 // ─────────────────────────────────────────
 // @route   POST /api/v1/billing/generate-bulk
-// @desc    Auto generate bills for all occupied flats
+// @desc    Auto generate bills for targeted flats matching BHK type & vehicle criteria
 // @access  Admin only
 // ─────────────────────────────────────────
 router.post("/generate-bulk", protect, authorize("admin"), async (req, res) => {
   try {
-    const { society, month, billType, dueDate } = req.body;
+    const {
+      society,
+      month,
+      billType,
+      dueDate,
+      amount: customAmount,
+      bhkType,
+      vehicleFilter,
+    } = req.body;
 
     if (!society || !month || !dueDate) {
       return res
         .status(400)
-        .json({ message: "Please fill all required fields" });
+        .json({ message: "Please fill all required fields (Society, Month, Due Date)" });
     }
 
-    // Get all occupied flats in this society
-    const flats = await Flat.find({ society, status: "occupied" }).populate(
-      "owner tenant",
-    );
+    if (!customAmount || Number(customAmount) <= 0) {
+      return res
+        .status(400)
+        .json({ message: "Please enter a valid bill amount (e.g. 1000)" });
+    }
+
+    const Parking = (await import("../models/Parking.js")).default;
+    const FlatRequest = (await import("../models/FlatRequest.js")).default;
+
+    // Filter flats by vehicle category if vehicleFilter is specified
+    let targetVehicleFlatIds = null;
+
+    if (vehicleFilter && vehicleFilter !== "all") {
+      let parkingFilter = { society };
+
+      if (vehicleFilter === "ev_only") {
+        parkingFilter.$or = [
+          { isEVCharging: true },
+          { vehicleType: "ev" },
+          { slotType: "ev" },
+        ];
+      } else if (vehicleFilter === "four_wheeler") {
+        parkingFilter.$or = [
+          { vehicleType: "four_wheeler" },
+          { slotType: "four_wheeler" },
+        ];
+      } else if (vehicleFilter === "two_wheeler") {
+        parkingFilter.$or = [
+          { vehicleType: "two_wheeler" },
+          { slotType: "two_wheeler" },
+        ];
+      }
+
+      const matchingSlots = await Parking.find(parkingFilter);
+      const parkingFlatIds = matchingSlots
+        .map((s) => (s.flat ? s.flat.toString() : null))
+        .filter(Boolean);
+
+      // Also check FlatRequests for approved vehicle info
+      let reqVehFilter = {};
+      if (vehicleFilter === "four_wheeler") reqVehFilter.vehicleType = { $in: ["four_wheeler", "both"] };
+      else if (vehicleFilter === "two_wheeler") reqVehFilter.vehicleType = { $in: ["two_wheeler", "both"] };
+
+      const matchingRequests = await FlatRequest.find({
+        society,
+        status: "approved",
+        ...reqVehFilter,
+      });
+
+      const requestFlatIds = matchingRequests
+        .map((r) => (r.flat ? r.flat.toString() : null))
+        .filter(Boolean);
+
+      targetVehicleFlatIds = Array.from(new Set([...parkingFlatIds, ...requestFlatIds]));
+    }
+
+    // Build flat query with optional BHK filter
+    const flatQuery = { society, status: "occupied" };
+    if (bhkType && bhkType !== "all") {
+      flatQuery.type = bhkType;
+    }
+
+    const flats = await Flat.find(flatQuery).populate("owner tenant");
 
     if (flats.length === 0) {
-      return res.status(404).json({ message: "No occupied flats found" });
+      return res.status(404).json({
+        message: `No occupied ${bhkType && bhkType !== "all" ? bhkType + " " : ""}flats found in this society`,
+      });
     }
 
     const bills = [];
     const skipped = [];
+    const billAmount = Number(customAmount);
 
     for (const flat of flats) {
-      // Determine resident — owner takes priority over tenant
       const resident = flat.owner || flat.tenant;
       if (!resident) continue;
 
-      const amount =
-        billType === "maintenance" ? flat.maintenanceCharge : flat.monthlyRent;
+      // Skip flat if it doesn't match vehicle criteria
+      if (targetVehicleFlatIds !== null && !targetVehicleFlatIds.includes(flat._id.toString())) {
+        continue;
+      }
 
-      // Skip if bill already exists
+      // Check if bill already exists for this flat, month & billType
       const billExists = await Bill.findOne({
         flat: flat._id,
         month,
@@ -127,18 +198,29 @@ router.post("/generate-bulk", protect, authorize("admin"), async (req, res) => {
         society,
         resident: resident._id,
         billType: billType || "maintenance",
-        amount,
+        amount: billAmount,
         dueDate,
         month,
       });
     }
 
-    // Insert all bills at once
+    if (bills.length === 0) {
+      if (skipped.length > 0) {
+        return res.status(400).json({
+          message: `Bills for ${month} (${billType || "maintenance"}) already exist for matching flats: ${skipped.join(", ")}`,
+        });
+      } else {
+        return res.status(404).json({
+          message: "No matching occupied flats found with the specified BHK type and vehicle criteria.",
+        });
+      }
+    }
+
     const createdBills = await Bill.insertMany(bills);
 
     res.status(201).json({
-      message: `${createdBills.length} bills generated successfully`,
-      skipped: skipped.length > 0 ? `Skipped: ${skipped.join(", ")}` : "None",
+      message: `${createdBills.length} bills of ₹${billAmount} generated successfully!`,
+      skipped: skipped.length > 0 ? `Skipped (already billed): ${skipped.join(", ")}` : "None",
       bills: createdBills,
     });
   } catch (error) {
@@ -175,19 +257,31 @@ router.get("/", protect, authorize("admin"), async (req, res) => {
 
 // ─────────────────────────────────────────
 // @route   GET /api/v1/billing/my-bills
-// @desc    Resident gets their own bills
+// @desc    Resident gets strictly their own bills
 // @access  Resident only
 // ─────────────────────────────────────────
 router.get("/my-bills", protect, authorize("resident"), async (req, res) => {
   try {
     const { status, month } = req.query;
 
-    const filter = { resident: req.user._id };
+    // Find flats where this user is owner or tenant
+    const myFlats = await Flat.find({
+      $or: [{ owner: req.user._id }, { tenant: req.user._id }],
+    });
+    const myFlatIds = myFlats.map((f) => f._id);
+
+    const filter = {
+      $or: [
+        { resident: req.user._id },
+        { flat: { $in: myFlatIds } },
+      ],
+    };
+
     if (status) filter.status = status;
     if (month) filter.month = month;
 
     const bills = await Bill.find(filter)
-      .populate("flat", "flatNumber block floor")
+      .populate("flat", "flatNumber block floor type")
       .populate("society", "name address")
       .sort({ createdAt: -1 });
 
@@ -239,7 +333,6 @@ router.get("/stats", protect, authorize("admin"), async (req, res) => {
 // ─────────────────────────────────────────
 router.get("/overdue", protect, authorize("admin"), async (req, res) => {
   try {
-    // Auto mark overdue
     await Bill.updateMany(
       {
         status: "unpaid",
@@ -262,18 +355,31 @@ router.get("/overdue", protect, authorize("admin"), async (req, res) => {
 
 // ─────────────────────────────────────────
 // @route   GET /api/v1/billing/:id
-// @desc    Get single bill
+// @desc    Get single bill (with strict authorization for residents)
 // @access  Private
 // ─────────────────────────────────────────
 router.get("/:id", protect, async (req, res) => {
   try {
     const bill = await Bill.findById(req.params.id)
-      .populate("flat", "flatNumber block floor type")
+      .populate("flat", "flatNumber block floor type owner tenant")
       .populate("resident", "name email phone")
       .populate("society", "name address");
 
     if (!bill) {
       return res.status(404).json({ message: "Bill not found" });
+    }
+
+    if (req.user.role === "resident") {
+      const isResidentBill =
+        (bill.resident && bill.resident._id.toString() === req.user._id.toString()) ||
+        (bill.flat && (
+          (bill.flat.owner && bill.flat.owner.toString() === req.user._id.toString()) ||
+          (bill.flat.tenant && bill.flat.tenant.toString() === req.user._id.toString())
+        ));
+
+      if (!isResidentBill) {
+        return res.status(403).json({ message: "Access denied. You can only view your own bills." });
+      }
     }
 
     res.json({ bill });

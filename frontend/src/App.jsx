@@ -33,7 +33,9 @@ import Users from "./pages/admin/Users";
 const RootRedirect = () => {
   const { user } = useSelector((state) => state.auth);
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === "admin") return <Navigate to="/admin" replace />;
+  if (user.role === "admin" || user.role === "security" || user.role === "staff") {
+    return <Navigate to="/admin" replace />;
+  }
   if (user.role === "resident") return <Navigate to="/resident" replace />;
   return <Navigate to="/login" replace />;
 };
@@ -49,23 +51,35 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Admin Routes */}
-        <Route path="/admin" element={<PrivateRoute role="admin" />}>
+        {/* Shared Management Base Route (Admin, Security, Staff) */}
+        <Route path="/admin" element={<PrivateRoute allowedRoles={["admin", "security", "staff"]} />}>
           <Route index element={<AdminDashboard />} />
-          <Route path="societies" element={<Societies />} />
-          <Route path="flats" element={<Flats />} />
-          <Route path="billing" element={<Billing />} />
           <Route path="complaints" element={<Complaints />} />
           <Route path="notices" element={<Notices />} />
-          <Route path="visitors" element={<Visitors />} />
-          <Route path="parking" element={<Parking />} />
-          <Route path="events" element={<Events />} />
-          <Route path="waste" element={<Waste />} />
-          <Route path="users" element={<Users />} />
+
+          {/* Security Guard Allowed Routes */}
+          <Route element={<PrivateRoute allowedRoles={["admin", "security"]} />}>
+            <Route path="visitors" element={<Visitors />} />
+            <Route path="parking" element={<Parking />} />
+          </Route>
+
+          {/* Maintenance Staff Allowed Routes */}
+          <Route element={<PrivateRoute allowedRoles={["admin", "staff"]} />}>
+            <Route path="waste" element={<Waste />} />
+          </Route>
+
+          {/* Strictly Admin-Only System Management Routes */}
+          <Route element={<PrivateRoute allowedRoles={["admin"]} />}>
+            <Route path="societies" element={<Societies />} />
+            <Route path="flats" element={<Flats />} />
+            <Route path="billing" element={<Billing />} />
+            <Route path="events" element={<Events />} />
+            <Route path="users" element={<Users />} />
+          </Route>
         </Route>
 
         {/* Resident Routes */}
-        <Route path="/resident" element={<PrivateRoute role="resident" />}>
+        <Route path="/resident" element={<PrivateRoute allowedRoles={["resident"]} />}>
           <Route index element={<ResidentDashboard />} />
           <Route path="my-flat" element={<MyFlat />} />
           <Route path="my-bills" element={<MyBills />} />

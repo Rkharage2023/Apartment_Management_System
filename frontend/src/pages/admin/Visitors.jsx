@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import API from "../../api/axios";
 import toast from "react-hot-toast";
-import { FaUserFriends, FaBan, FaSignOutAlt, FaSignInAlt, FaSearch, FaTrash, FaPlus } from "react-icons/fa";
+import { FaUserFriends, FaBan, FaSignOutAlt, FaSignInAlt, FaSearch, FaTrash, FaPlus, FaCheck, FaTimes } from "react-icons/fa";
 
 const Visitors = () => {
   const [visitors, setVisitors] = useState([]);
@@ -69,9 +69,14 @@ const Visitors = () => {
       toast.error("Please fill all required fields");
       return;
     }
+    const cleanPhone = walkinData.phone.replace(/\D/g, "");
+    if (cleanPhone.length !== 10) {
+      toast.error("Phone number must be exactly 10 digits");
+      return;
+    }
     try {
-      await API.post("/visitors/walkin", walkinData);
-      toast.success("Walk-in visitor registered and checked in");
+      await API.post("/visitors/walkin", { ...walkinData, phone: cleanPhone });
+      toast.success("Walk-in visitor registered and auto-approved");
       setShowWalkinModal(false);
       setWalkinData({
         name: "",
@@ -89,9 +94,33 @@ const Visitors = () => {
     }
   };
 
-  const handleCheckIn = async (id) => {
+  const handleApprove = async (id) => {
     try {
-      await API.put(`/visitors/${id}/checkin`);
+      await API.put(`/visitors/${id}/approve`);
+      toast.success("Visitor gate pass approved");
+      fetchVisitors();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Approval failed");
+    }
+  };
+
+  const handleReject = async (id) => {
+    try {
+      await API.put(`/visitors/${id}/reject`);
+      toast.success("Visitor gate pass rejected");
+      fetchVisitors();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Rejection failed");
+    }
+  };
+
+  const handleCheckIn = async (v) => {
+    if (v.approvalStatus !== "approved") {
+      toast.error("Pending gate pass visitor cannot be checked in. Please approve first.");
+      return;
+    }
+    try {
+      await API.put(`/visitors/${v._id}/checkin`);
       toast.success("Visitor checked in");
       fetchVisitors();
     } catch (error) {
@@ -299,11 +328,37 @@ const Visitors = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1">
+                        {v.approvalStatus === "pending" && !v.isBlacklisted && (
+                          <>
+                            <button
+                              onClick={() => handleApprove(v._id)}
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                              title="Approve Visitor Gate Pass"
+                            >
+                              <FaCheck />
+                            </button>
+                            <button
+                              onClick={() => handleReject(v._id)}
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                              title="Reject Visitor Gate Pass"
+                            >
+                              <FaTimes />
+                            </button>
+                          </>
+                        )}
                         {!v.entryTime && !v.isBlacklisted && (
                           <button
-                            onClick={() => handleCheckIn(v._id)}
-                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                            title="Check In Visitor"
+                            onClick={() => handleCheckIn(v)}
+                            className={`p-1.5 rounded-lg transition ${
+                              v.approvalStatus === "approved"
+                                ? "text-blue-600 hover:bg-blue-50"
+                                : "text-gray-400 hover:bg-gray-100"
+                            }`}
+                            title={
+                              v.approvalStatus === "approved"
+                                ? "Check In Visitor"
+                                : "Pending Approval — Click to check in or approve first"
+                            }
                           >
                             <FaSignInAlt />
                           </button>
@@ -397,7 +452,6 @@ const Visitors = () => {
                   onChange={(e) => setWalkinData({ ...walkinData, society: e.target.value, flat: "", host: "" })}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="">Select Society</option>
                   {societies.map((s) => (
                     <option key={s._id} value={s._id}>
                       {s.name}

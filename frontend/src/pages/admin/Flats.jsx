@@ -2,17 +2,31 @@ import { useState, useEffect } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import API from "../../api/axios";
 import toast from "react-hot-toast";
-import { FaPlus, FaTrash, FaBuilding, FaUserPlus } from "react-icons/fa";
+import {
+  FaPlus,
+  FaTrash,
+  FaBuilding,
+  FaUserPlus,
+  FaPaperPlane,
+  FaCheck,
+  FaTimes,
+  FaInbox,
+} from "react-icons/fa";
 
 const Flats = () => {
+  const [activeTab, setActiveTab] = useState("directory"); // "directory" | "requests"
   const [flats, setFlats] = useState([]);
   const [societies, setSocieties] = useState([]);
   const [residents, setResidents] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const [showModal, setShowModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedFlat, setSelectedFlat] = useState(null);
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterReqStatus, setFilterReqStatus] = useState("");
+
   const [assignData, setAssignData] = useState({
     userId: "",
     assignAs: "owner",
@@ -52,8 +66,12 @@ const Flats = () => {
     { length: totalFlatsCount },
     (_, i) => `${societyAcronym}-${String(i + 1).padStart(2, "0")}`
   );
+  const availableParkingSlots = Array.from(
+    { length: totalFlatsCount },
+    (_, i) => `${societyAcronym}-P-${String(i + 1).padStart(2, "0")}`
+  );
 
-  // BHK Type presets for Rent and Maintenance (Idea 3)
+  // BHK Type presets for Rent and Maintenance
   const BHK_PRESETS = {
     "1BHK": { rent: 8000, maintenance: 1500 },
     "2BHK": { rent: 12000, maintenance: 2000 },
@@ -62,7 +80,6 @@ const Flats = () => {
     Penthouse: { rent: 40000, maintenance: 6000 },
   };
 
-  // Calculate floor based on flat index & society flatsPerFloor
   const calcFloorForFlatNumber = (flatNum, availableList, fpf = 4) => {
     const idx = availableList.indexOf(flatNum);
     if (idx === -1) return 1;
@@ -70,7 +87,6 @@ const Flats = () => {
     return Math.floor(idx / perFloor) + 1;
   };
 
-  // Auto-select BHK type based on flat position on floor (Idea 1)
   const calcBHKForFlatNumber = (flatNum, availableList, fpf = 4) => {
     const idx = availableList.indexOf(flatNum);
     if (idx === -1) return "2BHK";
@@ -80,6 +96,12 @@ const Flats = () => {
     if (posOnFloor === 2) return "3BHK";
     if (posOnFloor === 3) return "4BHK";
     return "Penthouse";
+  };
+
+  const calcParkingForFlatNumber = (flatNum, availableList, acr = "GVS") => {
+    const idx = availableList.indexOf(flatNum);
+    const slotIdx = idx !== -1 ? idx + 1 : 1;
+    return `${acr}-P-${String(slotIdx).padStart(2, "0")}`;
   };
 
   const fetchFlats = async () => {
@@ -111,6 +133,7 @@ const Flats = () => {
         );
         const autoFloor = calcFloorForFlatNumber(firstFlatNum, initialFlatList, firstSoc?.flatsPerFloor);
         const autoType = calcBHKForFlatNumber(firstFlatNum, initialFlatList, firstSoc?.flatsPerFloor);
+        const autoParking = calcParkingForFlatNumber(firstFlatNum, initialFlatList, acr);
         const preset = BHK_PRESETS[autoType] || BHK_PRESETS["2BHK"];
 
         setFormData((prev) => ({
@@ -119,6 +142,7 @@ const Flats = () => {
           flatNumber: prev.flatNumber || firstFlatNum,
           floor: prev.floor || autoFloor,
           type: prev.type || autoType,
+          parkingSlot: prev.parkingSlot || autoParking,
           monthlyRent: prev.monthlyRent || preset.rent,
           maintenanceCharge: prev.maintenanceCharge || preset.maintenance,
         }));
@@ -133,11 +157,20 @@ const Flats = () => {
     } catch (error) {}
   };
 
+  const fetchRequests = async () => {
+    try {
+      const query = filterReqStatus ? `?status=${filterReqStatus}` : "";
+      const res = await API.get(`/flats/requests${query}`);
+      setRequests(res.data.requests || []);
+    } catch (error) {}
+  };
+
   useEffect(() => {
     fetchFlats();
     fetchSocieties();
     fetchResidents();
-  }, [filterStatus]);
+    fetchRequests();
+  }, [filterStatus, filterReqStatus]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -156,6 +189,7 @@ const Flats = () => {
       const targetFlatNum = flatNums.includes(formData.flatNumber) ? formData.flatNumber : flatNums[0] || "";
       const autoFloor = calcFloorForFlatNumber(targetFlatNum, flatNums, soc?.flatsPerFloor);
       const autoType = calcBHKForFlatNumber(targetFlatNum, flatNums, soc?.flatsPerFloor);
+      const autoParking = calcParkingForFlatNumber(targetFlatNum, flatNums, acr);
       const preset = BHK_PRESETS[autoType] || BHK_PRESETS["2BHK"];
 
       setFormData({
@@ -165,12 +199,14 @@ const Flats = () => {
         flatNumber: targetFlatNum,
         floor: autoFloor,
         type: autoType,
+        parkingSlot: autoParking,
         monthlyRent: preset.rent,
         maintenanceCharge: preset.maintenance,
       });
     } else if (name === "flatNumber") {
       const autoFloor = calcFloorForFlatNumber(value, availableFlatNumbers, selectedSocietyObj?.flatsPerFloor);
       const autoType = calcBHKForFlatNumber(value, availableFlatNumbers, selectedSocietyObj?.flatsPerFloor);
+      const autoParking = calcParkingForFlatNumber(value, availableFlatNumbers, societyAcronym);
       const preset = BHK_PRESETS[autoType] || BHK_PRESETS["2BHK"];
 
       setFormData({
@@ -178,6 +214,7 @@ const Flats = () => {
         flatNumber: value,
         floor: autoFloor,
         type: autoType,
+        parkingSlot: autoParking,
         monthlyRent: preset.rent,
         maintenanceCharge: preset.maintenance,
       });
@@ -205,6 +242,7 @@ const Flats = () => {
     );
     const autoFloor = calcFloorForFlatNumber(firstFlatNum, initialFlatList, firstSoc?.flatsPerFloor);
     const autoType = calcBHKForFlatNumber(firstFlatNum, initialFlatList, firstSoc?.flatsPerFloor);
+    const autoParking = calcParkingForFlatNumber(firstFlatNum, initialFlatList, acr || "FLAT");
     const preset = BHK_PRESETS[autoType] || BHK_PRESETS["2BHK"];
 
     setFormData({
@@ -215,7 +253,7 @@ const Flats = () => {
       type: autoType,
       monthlyRent: preset.rent,
       maintenanceCharge: preset.maintenance,
-      parkingSlot: "",
+      parkingSlot: autoParking,
     });
   };
 
@@ -287,184 +325,341 @@ const Flats = () => {
     }
   };
 
+  const handleApproveRequest = async (reqId) => {
+    try {
+      await API.put(`/flats/requests/${reqId}/approve`);
+      toast.success("Flat request approved & flat assigned successfully!");
+      fetchRequests();
+      fetchFlats();
+      fetchResidents();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Approval failed");
+    }
+  };
+
+  const handleRejectRequest = async (reqId) => {
+    const adminNote = window.prompt("Enter optional reason for rejection:", "Application rejected by admin");
+    if (adminNote === null) return;
+    try {
+      await API.put(`/flats/requests/${reqId}/reject`, { adminNote });
+      toast.success("Flat request rejected");
+      fetchRequests();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Rejection failed");
+    }
+  };
+
   const statusColors = {
     vacant: "bg-green-100 text-green-600",
     occupied: "bg-blue-100 text-blue-600",
     under_maintenance: "bg-yellow-100 text-yellow-600",
   };
 
-  // Filter residents who don't have a flat assigned yet
   const unassignedResidents = residents.filter((r) => !r.flatNumber);
 
   return (
     <DashboardLayout>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Flats</h1>
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <FaBuilding className="text-primary-600" /> Flats & Allotment Management
+          </h1>
           <p className="text-gray-500 text-sm mt-1">
-            Manage all flats — {flats.length} total
+            Manage flat directory, assign residents, and process allotment requests
           </p>
         </div>
+        {activeTab === "directory" && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-xs"
+          >
+            <FaPlus /> Add Flat
+          </button>
+        )}
+      </div>
+
+      {/* Main Navigation Tabs */}
+      <div className="flex items-center gap-3 border-b border-gray-200 pb-3 mb-6">
         <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition"
+          onClick={() => setActiveTab("directory")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition ${
+            activeTab === "directory"
+              ? "bg-primary-600 text-white shadow-xs"
+              : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+          }`}
         >
-          <FaPlus /> Add Flat
+          <FaBuilding /> Flat Directory ({flats.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("requests")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition relative ${
+            activeTab === "requests"
+              ? "bg-primary-600 text-white shadow-xs"
+              : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+          }`}
+        >
+          <FaPaperPlane /> Allotment Requests
+          {requests.filter((r) => r.status === "pending").length > 0 && (
+            <span className="px-2 py-0.5 bg-amber-500 text-white text-[11px] font-bold rounded-full ml-1">
+              {requests.filter((r) => r.status === "pending").length}
+            </span>
+          )}
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        {["", "vacant", "occupied", "under_maintenance"].map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilterStatus(s)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
-              filterStatus === s
-                ? "bg-primary-600 text-white"
-                : "bg-white border border-gray-200 text-gray-600 hover:border-primary-400"
-            }`}
-          >
-            {s === "" ? "All" : s.replace("_", " ")}
-          </button>
-        ))}
-      </div>
+      {/* TAB 1: FLAT DIRECTORY */}
+      {activeTab === "directory" && (
+        <div>
+          {/* Filters */}
+          <div className="flex gap-2 mb-4 flex-wrap">
+            {["", "vacant", "occupied", "under_maintenance"].map((s) => (
+              <button
+                key={s}
+                onClick={() => setFilterStatus(s)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
+                  filterStatus === s
+                    ? "bg-primary-600 text-white"
+                    : "bg-white border border-gray-200 text-gray-600 hover:border-primary-400"
+                }`}
+              >
+                {s === "" ? "All Status" : s.replace("_", " ")}
+              </button>
+            ))}
+          </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : flats.length === 0 ? (
-          <div className="text-center py-12">
-            <FaBuilding className="text-gray-300 text-5xl mx-auto mb-3" />
-            <p className="text-gray-500">No flats found</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Flat
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Block/Floor
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Type
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Owner
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Tenant
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Rent
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Status
-                  </th>
-                  <th className="text-left px-6 py-4 text-gray-500 font-medium">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {flats.map((f) => (
-                  <tr key={f._id} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4 font-medium text-gray-800">
-                      {f.flatNumber}
-                    </td>
-                    <td className="px-6 py-4 text-gray-500">
-                      Block {f.block} / Floor {f.floor}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{f.type}</td>
-                    <td className="px-6 py-4">
-                      {f.owner ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs font-bold">
-                            {f.owner.name?.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-800">
-                              {f.owner.name}
-                            </p>
+          {/* Table */}
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : flats.length === 0 ? (
+              <div className="text-center py-12">
+                <FaBuilding className="text-gray-300 text-5xl mx-auto mb-3" />
+                <p className="text-gray-500">No flats found</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th className="text-left px-6 py-4 text-gray-500 font-medium">Flat</th>
+                      <th className="text-left px-6 py-4 text-gray-500 font-medium">Block/Floor</th>
+                      <th className="text-left px-6 py-4 text-gray-500 font-medium">Type</th>
+                      <th className="text-left px-6 py-4 text-gray-500 font-medium">Owner</th>
+                      <th className="text-left px-6 py-4 text-gray-500 font-medium">Tenant</th>
+                      <th className="text-left px-6 py-4 text-gray-500 font-medium">Rent</th>
+                      <th className="text-left px-6 py-4 text-gray-500 font-medium">Status</th>
+                      <th className="text-left px-6 py-4 text-gray-500 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {flats.map((f) => (
+                      <tr key={f._id} className="hover:bg-gray-50 transition">
+                        <td className="px-6 py-4 font-medium text-gray-800">{f.flatNumber}</td>
+                        <td className="px-6 py-4 text-gray-500">
+                          Block {f.block} / Floor {f.floor}
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">{f.type}</td>
+                        <td className="px-6 py-4">
+                          {f.owner ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-primary-500 flex items-center justify-center text-white text-xs font-bold">
+                                {f.owner.name?.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-800">{f.owner.name}</p>
+                                <button
+                                  onClick={() => handleUnassign(f._id, "owner")}
+                                  className="text-xs text-red-400 hover:text-red-600"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic text-xs">No owner</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          {f.tenant ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold">
+                                {f.tenant.name?.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-800">{f.tenant.name}</p>
+                                <button
+                                  onClick={() => handleUnassign(f._id, "tenant")}
+                                  className="text-xs text-red-400 hover:text-red-600"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic text-xs">No tenant</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-gray-600">
+                          ₹{f.monthlyRent?.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[f.status]}`}
+                          >
+                            {f.status.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
                             <button
-                              onClick={() => handleUnassign(f._id, "owner")}
-                              className="text-xs text-red-400 hover:text-red-600"
+                              onClick={() => handleOpenAssign(f)}
+                              className="p-2 text-green-500 hover:bg-green-50 rounded-lg transition"
+                              title="Assign Resident"
                             >
-                              Remove
+                              <FaUserPlus />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(f._id)}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
+                            >
+                              <FaTrash />
                             </button>
                           </div>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 italic text-xs">
-                          No owner
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      {f.tenant ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold">
-                            {f.tenant.name?.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-800">
-                              {f.tenant.name}
-                            </p>
-                            <button
-                              onClick={() => handleUnassign(f._id, "tenant")}
-                              className="text-xs text-red-400 hover:text-red-600"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 italic text-xs">
-                          No tenant
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      ₹{f.monthlyRent?.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full font-medium ${statusColors[f.status]}`}
-                      >
-                        {f.status.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleOpenAssign(f)}
-                          className="p-2 text-green-500 hover:bg-green-50 rounded-lg transition"
-                          title="Assign Resident"
-                        >
-                          <FaUserPlus />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(f._id)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
-                        >
-                          <FaTrash />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* TAB 2: ALLOTMENT REQUESTS */}
+      {activeTab === "requests" && (
+        <div>
+          {/* Requests Status Filter */}
+          <div className="flex gap-2 mb-4 flex-wrap">
+            {["", "pending", "approved", "rejected"].map((s) => (
+              <button
+                key={s}
+                onClick={() => setFilterReqStatus(s)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition capitalize ${
+                  filterReqStatus === s
+                    ? "bg-primary-600 text-white"
+                    : "bg-white border border-gray-200 text-gray-600 hover:border-primary-400"
+                }`}
+              >
+                {s === "" ? "All Requests" : s}
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
+            {requests.length === 0 ? (
+              <div className="text-center py-12">
+                <FaInbox className="text-gray-300 text-5xl mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">No flat allocation requests found</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-100 text-gray-500 font-medium">
+                    <tr>
+                      <th className="text-left px-6 py-4">Resident</th>
+                      <th className="text-left px-6 py-4">Requested Flat</th>
+                      <th className="text-left px-6 py-4">Request As</th>
+                      <th className="text-left px-6 py-4">Vehicle Details</th>
+                      <th className="text-left px-6 py-4">Resident Note</th>
+                      <th className="text-left px-6 py-4">Status</th>
+                      <th className="text-left px-6 py-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {requests.map((r) => (
+                      <tr key={r._id} className="hover:bg-gray-50/80 transition">
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-gray-800">{r.user?.name || "User"}</p>
+                          <p className="text-xs text-gray-400">{r.user?.email}</p>
+                          {r.user?.phone && <p className="text-xs text-gray-500">📞 {r.user.phone}</p>}
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-gray-800">Flat {r.flat?.flatNumber}</p>
+                          <p className="text-xs text-gray-500">
+                            {r.society?.name} • Block {r.flat?.block}
+                          </p>
+                          <p className="text-xs font-medium text-emerald-600 mt-0.5">
+                            Rent: ₹{r.flat?.monthlyRent?.toLocaleString()}/mo
+                          </p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-xs px-2.5 py-1 bg-gray-100 font-semibold rounded-md uppercase text-gray-700">
+                            {r.requestAs}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-xs text-gray-700">
+                          {r.vehicleDetails ? (
+                            <div>
+                              <p className="font-semibold text-gray-800">🚘 {r.vehicleDetails}</p>
+                              <p className="text-gray-400 capitalize">Type: {r.vehicleType?.replace("_", " ")}</p>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic">No vehicle</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-xs text-gray-600 max-w-xs">
+                          {r.note || <span className="text-gray-300 italic">None</span>}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`text-xs px-2.5 py-0.5 rounded-full font-semibold capitalize ${
+                              r.status === "approved"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : r.status === "rejected"
+                                ? "bg-rose-100 text-rose-700"
+                                : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {r.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {r.status === "pending" ? (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleApproveRequest(r._id)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition shadow-2xs"
+                                title="Approve & Assign Flat to Resident"
+                              >
+                                <FaCheck /> Approve & Assign
+                              </button>
+                              <button
+                                onClick={() => handleRejectRequest(r._id)}
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                title="Reject Request"
+                              >
+                                <FaTimes />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">
+                              Processed ({new Date(r.updatedAt).toLocaleDateString()})
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Add Flat Modal */}
       {showModal && (
@@ -475,9 +670,7 @@ const Flats = () => {
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Society *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Society *</label>
                 <select
                   name="society"
                   value={formData.society}
@@ -514,9 +707,7 @@ const Flats = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Block *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Block *</label>
                   <select
                     name="block"
                     value={formData.block}
@@ -531,9 +722,7 @@ const Flats = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Floor No *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Floor No *</label>
                   <input
                     name="floor"
                     type="number"
@@ -544,9 +733,7 @@ const Flats = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    BHK Type *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">BHK Type *</label>
                   <select
                     name="type"
                     value={formData.type}
@@ -561,9 +748,7 @@ const Flats = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Monthly Rent
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Rent</label>
                   <input
                     name="monthlyRent"
                     type="number"
@@ -574,9 +759,7 @@ const Flats = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Maintenance
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Maintenance</label>
                   <input
                     name="maintenanceCharge"
                     type="number"
@@ -588,16 +771,19 @@ const Flats = () => {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Parking Slot
-                </label>
-                <input
+                <label className="block text-sm font-medium text-gray-700 mb-1">Parking Slot</label>
+                <select
                   name="parkingSlot"
                   value={formData.parkingSlot}
                   onChange={handleChange}
-                  placeholder="P-01"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                >
+                  {availableParkingSlots.map((slot) => (
+                    <option key={slot} value={slot}>
+                      {slot}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex gap-3 pt-2">
                 <button
@@ -622,7 +808,7 @@ const Flats = () => {
         </div>
       )}
 
-      {/* ✅ Assign Modal with Dropdown */}
+      {/* Assign Modal */}
       {showAssignModal && selectedFlat && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md">
@@ -635,7 +821,6 @@ const Flats = () => {
               </p>
             </div>
             <form onSubmit={handleAssign} className="p-6 space-y-4">
-              {/* Assign As */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Assign As *
@@ -660,7 +845,6 @@ const Flats = () => {
                 </div>
               </div>
 
-              {/* Resident Dropdown */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Select Resident *
@@ -716,7 +900,6 @@ const Flats = () => {
                 )}
               </div>
 
-              {/* Selected Resident Preview */}
               {assignData.userId && (
                 <div className="bg-green-50 border border-green-100 rounded-xl p-3">
                   <p className="text-xs text-green-600 font-medium">

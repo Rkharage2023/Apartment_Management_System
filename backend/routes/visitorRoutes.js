@@ -21,9 +21,16 @@ router.post("/", protect, authorize("resident"), async (req, res) => {
         .json({ message: "Please fill all required fields" });
     }
 
+    const cleanPhone = phone.toString().replace(/\D/g, "");
+    if (cleanPhone.length !== 10) {
+      return res
+        .status(400)
+        .json({ message: "Phone number must be exactly 10 digits" });
+    }
+
     const visitor = await Visitor.create({
       name,
-      phone,
+      phone: cleanPhone,
       purpose,
       society,
       flat,
@@ -57,16 +64,23 @@ router.post("/walkin", protect, authorize("security", "admin"), async (req, res)
         .json({ message: "Please fill all required fields" });
     }
 
+    const cleanPhone = phone.toString().replace(/\D/g, "");
+    if (cleanPhone.length !== 10) {
+      return res
+        .status(400)
+        .json({ message: "Phone number must be exactly 10 digits" });
+    }
+
     const visitor = await Visitor.create({
       name,
-      phone,
+      phone: cleanPhone,
       purpose,
       society,
       flat,
       host,
       vehicleNumber: vehicleNumber || "",
       note: note || "",
-      approvalStatus: "pending",
+      approvalStatus: "approved",
       checkedInBy: req.user._id,
       entryTime: new Date(),
     });
@@ -177,6 +191,66 @@ router.get(
 );
 
 // ─────────────────────────────────────────
+// @route   PUT /api/v1/visitors/:id/approve
+// @desc    Admin, Security, or Resident approves a visitor gate pass
+// @access  Admin, Security, Resident
+// ─────────────────────────────────────────
+router.put(
+  "/:id/approve",
+  protect,
+  authorize("admin", "security", "resident"),
+  async (req, res) => {
+    try {
+      const visitor = await Visitor.findById(req.params.id);
+
+      if (!visitor) {
+        return res.status(404).json({ message: "Visitor not found" });
+      }
+
+      if (visitor.isBlacklisted) {
+        return res
+          .status(403)
+          .json({ message: "Visitor is blacklisted — cannot approve" });
+      }
+
+      visitor.approvalStatus = "approved";
+      await visitor.save();
+
+      res.json({ message: "Visitor approved successfully", visitor });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  },
+);
+
+// ─────────────────────────────────────────
+// @route   PUT /api/v1/visitors/:id/reject
+// @desc    Admin, Security, or Resident rejects a visitor gate pass
+// @access  Admin, Security, Resident
+// ─────────────────────────────────────────
+router.put(
+  "/:id/reject",
+  protect,
+  authorize("admin", "security", "resident"),
+  async (req, res) => {
+    try {
+      const visitor = await Visitor.findById(req.params.id);
+
+      if (!visitor) {
+        return res.status(404).json({ message: "Visitor not found" });
+      }
+
+      visitor.approvalStatus = "rejected";
+      await visitor.save();
+
+      res.json({ message: "Visitor gate pass rejected", visitor });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  },
+);
+
+// ─────────────────────────────────────────
 // @route   PUT /api/v1/visitors/:id/checkin
 // @desc    Security / Admin checks in a visitor
 // @access  Security & Admin
@@ -195,13 +269,18 @@ router.put("/:id/checkin", protect, authorize("security", "admin"), async (req, 
         .json({ message: "Visitor is blacklisted — entry denied" });
     }
 
+    if (visitor.approvalStatus !== "approved") {
+      return res.status(400).json({
+        message: "Pending gate pass visitor is not allowed for check in. Must be approved first.",
+      });
+    }
+
     if (visitor.entryTime) {
       return res.status(400).json({ message: "Visitor already checked in" });
     }
 
     visitor.entryTime = new Date();
     visitor.checkedInBy = req.user._id;
-    visitor.approvalStatus = "approved";
     await visitor.save();
 
     res.json({ message: "Visitor checked in successfully", visitor });
@@ -272,9 +351,9 @@ router.put("/:id/blacklist", protect, authorize("admin", "security"), async (req
 // ─────────────────────────────────────────
 // @route   DELETE /api/v1/visitors/:id
 // @desc    Delete visitor record
-// @access  Admin only
+// @access  Admin & Security
 // ─────────────────────────────────────────
-router.delete("/:id", protect, authorize("admin"), async (req, res) => {
+router.delete("/:id", protect, authorize("admin", "security"), async (req, res) => {
   try {
     const visitor = await Visitor.findById(req.params.id);
 

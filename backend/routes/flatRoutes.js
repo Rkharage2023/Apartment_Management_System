@@ -1,10 +1,45 @@
 import express from "express";
 import Flat from "../models/Flat.js";
 import User from "../models/User.js";
+import Parking from "../models/Parking.js";
+import FlatRequest from "../models/FlatRequest.js";
 import protect from "../middleware/authMiddleware.js";
 import authorize from "../middleware/roleMiddleware.js";
 
 const router = express.Router();
+
+const syncParkingForFlat = async (flat) => {
+  if (!flat || !flat.parkingSlot || !flat.society) return;
+  try {
+    let slot = await Parking.findOne({
+      society: flat.society,
+      slotNumber: flat.parkingSlot,
+    });
+
+    const activeUserId = flat.tenant || flat.owner || null;
+    const newStatus = activeUserId ? "occupied" : "available";
+
+    if (!slot) {
+      await Parking.create({
+        society: flat.society,
+        slotNumber: flat.parkingSlot,
+        slotType: "four_wheeler",
+        status: newStatus,
+        assignedTo: activeUserId,
+        flat: flat._id,
+        monthlyCharge: 0,
+        note: "Auto-synced from Flat",
+      });
+    } else {
+      slot.flat = flat._id;
+      slot.assignedTo = activeUserId;
+      slot.status = newStatus;
+      await slot.save();
+    }
+  } catch (err) {
+    console.error("Error syncing parking slot:", err);
+  }
+};
 
 // ─────────────────────────────────────────
 // @route   POST /api/v1/flats
@@ -68,6 +103,8 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
       parkingSlot: parkingSlot || "",
     });
 
+    await syncParkingForFlat(flat);
+
     res.status(201).json({ message: "Flat created successfully", flat });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -77,7 +114,7 @@ router.post("/", protect, authorize("admin"), async (req, res) => {
 // ─────────────────────────────────────────
 // @route   GET /api/v1/flats
 // @desc    Get all flats — filter by status/block
-// @access  Admin only
+// @access  Admin & Authenticated Users
 // ─────────────────────────────────────────
 router.get("/", protect, async (req, res) => {
   try {
@@ -118,6 +155,176 @@ router.get("/my-flat", protect, authorize("resident"), async (req, res) => {
     }
 
     res.json({ flat });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─────────────────────────────────────────
+// @route   POST /api/v1/flats/request
+// @desc    Resident requests a vacant flat
+// @access  Resident only
+// ─────────────────────────────────────────
+router.post("/request", protect, authorize("resident"), async (req, res) => {
+  try {
+    const { flatId, requestAs, vehicleDetails, vehicleType, note } = req.body;
+
+    if (!flatId) {
+      return res.status(400).json({ message: "Please select a flat to request" });
+    }
+
+    const flat = await Flat.findById(flatId);
+    if (!flat) {
+      return res.status(404).json({ message: "Flat not found" });
+    }
+
+    if (flat.status !== "vacant") {
+      return res
+        .status(400)
+        .json({ message: "This flat is not vacant or available for request" });
+    }
+
+    const existingRequest = await FlatRequest.findOne({
+      user: req.user._id,
+      flat: flatId,
+      status: "pending",
+    });
+
+    if (existingRequest) {
+      return res.status(400).json({
+        message: "You already have a pending request for this flat",
+      });
+    }
+
+    const requestDoc = await FlatRequest.create({
+      user: req.user._id,
+      flat: flatId,
+      society: flat.society,
+      requestAs: requestAs || "tenant",
+      vehicleDetails: vehicleDetails || "",
+      vehicleType: vehicleType || "none",
+      note: note || "",
+      status: "pending",
+    });
+
+    res.status(201).json({
+      message: "Flat allocation request submitted! Awaiting Admin approval.",
+      request: requestDoc,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─────────────────────────────────────────
+// @route   GET /api/v1/flats/requests/my-requests
+// @desc    Resident gets their submitted flat requests
+// @access  Resident only
+// ─────────────────────────────────────────
+router.get("/requests/my-requests", protect, authorize("resident"), async (req, res) => {
+  try {
+    const requests = await FlatRequest.find({ user: req.user._id })
+      .populate("flat", "flatNumber block floor type monthlyRent maintenanceCharge status parkingSlot")
+      .populate("society", "name address")
+      .sort({ createdAt: -1 });
+
+    res.json({ count: requests.length, requests });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─────────────────────────────────────────
+// @route   GET /api/v1/flats/requests
+// @desc    Admin gets all flat requests
+// @access  Admin only
+// ─────────────────────────────────────────
+router.get("/requests", protect, authorize("admin"), async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+
+    const requests = await FlatRequest.find(filter)
+      .populate("user", "name email phone")
+      .populate("flat", "flatNumber block floor type monthlyRent status parkingSlot")
+      .populate("society", "name")
+      .sort({ createdAt: -1 });
+
+    res.json({ count: requests.length, requests });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─────────────────────────────────────────
+// @route   PUT /api/v1/flats/requests/:id/approve
+// @desc    Admin approves flat request and assigns flat to user
+// @access  Admin only
+// ─────────────────────────────────────────
+router.put("/requests/:id/approve", protect, authorize("admin"), async (req, res) => {
+  try {
+    const flatReq = await FlatRequest.findById(req.params.id);
+    if (!flatReq) {
+      return res.status(404).json({ message: "Flat request not found" });
+    }
+
+    if (flatReq.status === "approved") {
+      return res.status(400).json({ message: "Request is already approved" });
+    }
+
+    const flat = await Flat.findById(flatReq.flat);
+    if (!flat) {
+      return res.status(404).json({ message: "Flat not found" });
+    }
+
+    const user = await User.findById(flatReq.user);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const assignField = flatReq.requestAs === "owner" ? "owner" : "tenant";
+    flat[assignField] = user._id;
+    flat.status = "occupied";
+    await flat.save();
+
+    user.flatNumber = flat.flatNumber;
+    user.society = flat.society;
+    await user.save();
+
+    flatReq.status = "approved";
+    flatReq.adminNote = req.body.adminNote || "Approved & Flat Assigned";
+    await flatReq.save();
+
+    await syncParkingForFlat(flat);
+
+    res.json({
+      message: `Flat request approved and Flat ${flat.flatNumber} assigned to ${user.name}`,
+      request: flatReq,
+      flat,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─────────────────────────────────────────
+// @route   PUT /api/v1/flats/requests/:id/reject
+// @desc    Admin rejects flat request
+// @access  Admin only
+// ─────────────────────────────────────────
+router.put("/requests/:id/reject", protect, authorize("admin"), async (req, res) => {
+  try {
+    const flatReq = await FlatRequest.findById(req.params.id);
+    if (!flatReq) {
+      return res.status(404).json({ message: "Flat request not found" });
+    }
+
+    flatReq.status = "rejected";
+    flatReq.adminNote = req.body.adminNote || "Rejected by Admin";
+    await flatReq.save();
+
+    res.json({ message: "Flat request rejected", request: flatReq });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -186,6 +393,8 @@ router.put("/:id/assign", protect, authorize("admin"), async (req, res) => {
     user.society = flat.society;
     await user.save();
 
+    await syncParkingForFlat(flat);
+
     res.json({ message: `User assigned as ${assignAs} successfully`, flat });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -228,6 +437,8 @@ router.put("/:id/unassign", protect, authorize("admin"), async (req, res) => {
       await User.findByIdAndUpdate(userId, { flatNumber: "", society: null });
     }
 
+    await syncParkingForFlat(flat);
+
     res.json({ message: `${assignAs} removed from flat successfully`, flat });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -265,6 +476,8 @@ router.put("/:id", protect, authorize("admin"), async (req, res) => {
     flat.parkingSlot = parkingSlot || flat.parkingSlot;
 
     await flat.save();
+
+    await syncParkingForFlat(flat);
 
     res.json({ message: "Flat updated successfully", flat });
   } catch (error) {

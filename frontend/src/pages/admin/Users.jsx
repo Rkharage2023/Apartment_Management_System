@@ -29,9 +29,8 @@ const Users = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const query = filterRole ? `?role=${filterRole}` : "";
-      const res = await API.get(`/users${query}`);
-      setUsers(res.data.users);
+      const res = await API.get("/users");
+      setUsers(res.data.users || []);
     } catch (error) {
       toast.error("Failed to fetch users");
     } finally {
@@ -42,14 +41,18 @@ const Users = () => {
   const fetchSocieties = async () => {
     try {
       const res = await API.get("/societies");
-      setSocieties(res.data.societies || []);
+      const list = res.data.societies || [];
+      setSocieties(list);
+      if (list.length > 0) {
+        setFormData((prev) => ({ ...prev, society: prev.society || list[0]._id }));
+      }
     } catch (error) {}
   };
 
   useEffect(() => {
     fetchUsers();
     fetchSocieties();
-  }, [filterRole]);
+  }, []);
 
   const handleOpenCreate = (defaultRole = "resident") => {
     setEditingUser(null);
@@ -114,7 +117,7 @@ const Users = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.email || (!editingUser && !formData.password)) {
+    if (!formData.name || !formData.email) {
       toast.error("Please fill all required fields");
       return;
     }
@@ -124,8 +127,9 @@ const Users = () => {
         await API.put(`/users/${editingUser._id}`, formData);
         toast.success(`User "${formData.name}" updated!`);
       } else {
-        await API.post(`/users`, formData);
-        toast.success(`User "${formData.name}" created successfully!`);
+        const res = await API.post(`/users`, formData);
+        const defPass = res.data.defaultPassword || "Password123";
+        toast.success(`Account created! Default password: ${defPass}`);
       }
       setShowModal(false);
       fetchUsers();
@@ -137,16 +141,19 @@ const Users = () => {
   };
 
   const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return users;
-    const q = searchQuery.toLowerCase();
-    return users.filter(
-      (u) =>
+    return users.filter((u) => {
+      const matchesRole = !filterRole || u.role === filterRole;
+      if (!matchesRole) return false;
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
         u.name?.toLowerCase().includes(q) ||
         u.email?.toLowerCase().includes(q) ||
         u.phone?.includes(q) ||
         u.flatNumber?.toLowerCase().includes(q)
-    );
-  }, [users, searchQuery]);
+      );
+    });
+  }, [users, filterRole, searchQuery]);
 
   const roleColors = {
     admin: "bg-red-100 text-red-700 border-red-200",
@@ -416,15 +423,19 @@ const Users = () => {
 
               {!editingUser && (
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Password *</label>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Initial Password (Optional)
+                  </label>
                   <input
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="At least 6 characters"
-                    required
+                    placeholder="Enter password or leave blank for default"
                     className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mt-1 font-medium">
+                    🔑 If left blank, a default password is automatically set. The user can change their password anytime after logging in.
+                  </p>
                 </div>
               )}
 
@@ -449,7 +460,6 @@ const Users = () => {
                     onChange={(e) => setFormData({ ...formData, society: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
-                    <option value="">Select Society</option>
                     {societies.map((s) => (
                       <option key={s._id} value={s._id}>
                         {s.name}

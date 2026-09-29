@@ -1,21 +1,57 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import API from "../../api/axios";
 import toast from "react-hot-toast";
-import { FaPlus, FaMoneyBill, FaCheck, FaHistory, FaExclamationTriangle } from "react-icons/fa";
+import {
+  FaPlus,
+  FaMoneyBill,
+  FaCheck,
+  FaHistory,
+  FaExclamationTriangle,
+  FaSearch,
+  FaTimes,
+  FaFilter,
+  FaUndo,
+} from "react-icons/fa";
 
 // Convert "2026-07" (input[type=month] value) → "July-2026" (DB format)
 const formatMonthLabel = (val) => {
   if (!val) return "";
   const [year, month] = val.split("-");
-  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
   return `${monthNames[parseInt(month, 10) - 1]}-${year}`;
 };
 
 // Convert "July-2026" back to "2026-07" for the input default value
 const labelToMonthInput = (label) => {
   if (!label) return "";
-  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
   const [name, year] = label.split("-");
   const idx = monthNames.indexOf(name);
   if (idx === -1 || !year) return "";
@@ -40,8 +76,14 @@ const Billing = () => {
   const [showModal, setShowModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [activeTab, setActiveTab] = useState("bills");
+
+  // Filters
   const [filterStatus, setFilterStatus] = useState("");
   const [filterMonth, setFilterMonth] = useState(""); // stored as "2026-07"
+  const [filterSociety, setFilterSociety] = useState("");
+  const [filterBillType, setFilterBillType] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState("");
 
   const [formData, setFormData] = useState({
     flat: "",
@@ -50,26 +92,32 @@ const Billing = () => {
     billType: "maintenance",
     amount: "",
     dueDate: "",
-    month: "",      // stored as "2026-07" for the input
+    month: "", // stored as "2026-07" for the input
     note: "",
   });
 
   const [bulkData, setBulkData] = useState({
     society: "",
-    month: "",      // stored as "2026-07" for the input
-    billType: "maintenance",
+    month: "", // stored as "2026-07" for the input
+    billType: "parking",
+    amount: "",
+    bhkType: "all",
+    vehicleFilter: "all",
     dueDate: "",
   });
 
   const fetchBills = async () => {
     try {
       setLoading(true);
-      let query = "?";
-      if (filterStatus) query += `status=${filterStatus}&`;
-      // Convert "2026-07" picker value → "July-2026" for backend filter
-      if (filterMonth) query += `month=${formatMonthLabel(filterMonth)}`;
-      const res = await API.get(`/billing${query}`);
-      setBills(res.data.bills);
+      const params = new URLSearchParams();
+      if (filterStatus) params.append("status", filterStatus);
+      if (filterSociety) params.append("society", filterSociety);
+      if (filterBillType) params.append("billType", filterBillType);
+      if (filterMonth) params.append("month", formatMonthLabel(filterMonth));
+
+      const queryString = params.toString() ? `?${params.toString()}` : "";
+      const res = await API.get(`/billing${queryString}`);
+      setBills(res.data.bills || []);
     } catch (error) {
       toast.error("Failed to fetch bills");
     } finally {
@@ -87,46 +135,123 @@ const Billing = () => {
   const fetchPaymentHistory = async () => {
     try {
       const res = await API.get("/billing/payments/history");
-      setPayments(res.data.payments);
+      setPayments(res.data.payments || []);
     } catch (error) {}
   };
 
   const fetchSocieties = async () => {
     try {
       const res = await API.get("/societies");
-      setSocieties(res.data.societies);
+      const list = res.data.societies || [];
+      setSocieties(list);
+      if (list.length > 0) {
+        setBulkData((prev) => ({ ...prev, society: prev.society || list[0]._id }));
+      }
     } catch (error) {}
   };
 
   const fetchFlats = async () => {
     try {
       const res = await API.get("/flats");
-      setFlats(res.data.flats);
+      setFlats(res.data.flats || []);
     } catch (error) {}
   };
 
   const fetchResidents = async () => {
     try {
       const res = await API.get("/users?role=resident");
-      setResidents(res.data.users);
+      setResidents(res.data.users || []);
     } catch (error) {}
   };
 
   useEffect(() => {
     fetchBills();
+  }, [filterStatus, filterMonth, filterSociety, filterBillType]);
+
+  useEffect(() => {
     fetchStats();
     fetchPaymentHistory();
     fetchSocieties();
     fetchFlats();
     fetchResidents();
-  }, [filterStatus, filterMonth]);
+  }, []);
 
-const getRefId = (ref) => {
-  if (!ref) return "";
-  if (typeof ref === "string") return ref;
-  if (typeof ref === "object" && ref._id) return ref._id.toString();
-  return "";
-};
+  // Filtered Bills Calculation
+  const filteredBills = useMemo(() => {
+    if (!searchQuery.trim()) return bills;
+    const q = searchQuery.toLowerCase().trim();
+    return bills.filter((b) => {
+      const residentName = b.resident?.name || "";
+      const residentEmail = b.resident?.email || "";
+      const residentPhone = b.resident?.phone || "";
+      const flatNum = b.flat?.flatNumber || "";
+      const block = b.flat?.block || "";
+      const societyName = b.society?.name || "";
+      const billType = b.billType || "";
+      const amountStr = b.amount?.toString() || "";
+
+      return (
+        residentName.toLowerCase().includes(q) ||
+        residentEmail.toLowerCase().includes(q) ||
+        residentPhone.toLowerCase().includes(q) ||
+        flatNum.toLowerCase().includes(q) ||
+        block.toLowerCase().includes(q) ||
+        societyName.toLowerCase().includes(q) ||
+        billType.toLowerCase().includes(q) ||
+        amountStr.includes(q)
+      );
+    });
+  }, [bills, searchQuery]);
+
+  // Filtered Payments Calculation
+  const filteredPayments = useMemo(() => {
+    return payments.filter((p) => {
+      const q = searchQuery.toLowerCase().trim();
+      const residentName = p.resident?.name || "";
+      const flatNum = p.flat?.flatNumber || "";
+      const societyName = p.society?.name || "";
+      const txnId = p.razorpayPaymentId || "";
+      const amountStr = p.amount?.toString() || "";
+
+      const matchesSearch =
+        !q ||
+        residentName.toLowerCase().includes(q) ||
+        flatNum.toLowerCase().includes(q) ||
+        societyName.toLowerCase().includes(q) ||
+        txnId.toLowerCase().includes(q) ||
+        amountStr.includes(q);
+
+      const matchesMethod =
+        !paymentMethodFilter || p.paymentMethod === paymentMethodFilter;
+
+      return matchesSearch && matchesMethod;
+    });
+  }, [payments, searchQuery, paymentMethodFilter]);
+
+  const isAnyFilterActive = Boolean(
+    filterStatus ||
+      filterMonth ||
+      filterSociety ||
+      filterBillType ||
+      searchQuery ||
+      paymentMethodFilter
+  );
+
+  const handleClearFilters = () => {
+    setFilterStatus("");
+    setFilterMonth("");
+    setFilterSociety("");
+    setFilterBillType("");
+    setSearchQuery("");
+    setPaymentMethodFilter("");
+  };
+
+  const getRefId = (ref) => {
+    if (!ref) return "";
+    if (typeof ref === "string") return ref;
+    if (typeof ref === "object" && ref._id) return ref._id.toString();
+    return "";
+  };
 
   const handleFlatChange = (flatId) => {
     const selectedFlat = flats.find((f) => f._id === flatId);
@@ -198,6 +323,7 @@ const getRefId = (ref) => {
   const handleBulkGenerate = async (e) => {
     e.preventDefault();
     if (!bulkData.society) { toast.error("Please select a society"); return; }
+    if (!bulkData.amount || Number(bulkData.amount) <= 0) { toast.error("Please enter a valid bill amount (e.g. 1000)"); return; }
     if (!bulkData.month) { toast.error("Please select a billing month"); return; }
     if (!bulkData.dueDate) { toast.error("Please select a due date"); return; }
     try {
@@ -208,10 +334,10 @@ const getRefId = (ref) => {
       });
       toast.success(res.data.message);
       if (res.data.skipped && res.data.skipped !== "None") {
-        toast(`Skipped (already billed): ${res.data.skipped}`, { icon: "⚠️" });
+        toast(`Skipped: ${res.data.skipped}`, { icon: "⚠️" });
       }
       setShowBulkModal(false);
-      setBulkData({ society: "", month: "", billType: "maintenance", dueDate: "" });
+      setBulkData({ society: "", month: "", billType: "parking", amount: "", vehicleFilter: "all", dueDate: "" });
       fetchBills();
       fetchStats();
     } catch (error) {
@@ -310,47 +436,140 @@ const getRefId = (ref) => {
         </div>
       </div>
 
-      {/* Tab Controls & Filters */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-semibold">
-          <button
-            onClick={() => setActiveTab("bills")}
-            className={`px-4 py-2 rounded-lg transition ${
-              activeTab === "bills" ? "bg-white text-gray-800 shadow-xs" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            All Invoices ({bills.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("payments")}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition ${
-              activeTab === "payments" ? "bg-white text-gray-800 shadow-xs" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <FaHistory /> Payment Log ({payments.length})
-          </button>
+      {/* Tab Controls & Filter Bar */}
+      <div className="bg-white rounded-2xl p-4 shadow-xs border border-gray-100 mb-6 space-y-4">
+        {/* Top Row: Tabs & Search */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+          <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-semibold w-full md:w-auto">
+            <button
+              onClick={() => setActiveTab("bills")}
+              className={`flex-1 md:flex-none px-4 py-2 rounded-lg transition ${
+                activeTab === "bills"
+                  ? "bg-white text-gray-800 shadow-xs font-bold"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              All Invoices ({filteredBills.length} / {bills.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("payments")}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg transition ${
+                activeTab === "payments"
+                  ? "bg-white text-gray-800 shadow-xs font-bold"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <FaHistory /> Payment Log ({filteredPayments.length} / {payments.length})
+            </button>
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative w-full md:w-72">
+            <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
+            <input
+              type="text"
+              placeholder="Search resident, flat, block..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <FaTimes />
+              </button>
+            )}
+          </div>
         </div>
 
-        {activeTab === "bills" && (
-          <div className="flex gap-2 flex-wrap">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">All Status</option>
-              <option value="unpaid">Unpaid</option>
-              <option value="paid">Paid</option>
-              <option value="overdue">Overdue</option>
-            </select>
-            <input
-              type="month"
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-              className="px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+        {/* Filter Dropdowns Grid */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100 text-xs">
+          <div className="flex items-center gap-1.5 text-gray-500 font-semibold pr-2">
+            <FaFilter className="text-primary-600" /> Filters:
           </div>
-        )}
+
+          {/* Society Filter */}
+          <select
+            value={filterSociety}
+            onChange={(e) => setFilterSociety(e.target.value)}
+            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="">All Societies</option>
+            {societies.map((s) => (
+              <option key={s._id} value={s._id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+
+          {activeTab === "bills" ? (
+            <>
+              {/* Bill Type Filter */}
+              <select
+                value={filterBillType}
+                onChange={(e) => setFilterBillType(e.target.value)}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 capitalize"
+              >
+                <option value="">All Bill Types</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="parking">Parking</option>
+                <option value="water">Water</option>
+                <option value="electricity">Electricity</option>
+                <option value="amenity">Amenity</option>
+                <option value="other">Other</option>
+              </select>
+
+              {/* Status Filter */}
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">All Status</option>
+                <option value="unpaid">Unpaid</option>
+                <option value="paid">Paid</option>
+                <option value="overdue">Overdue</option>
+              </select>
+
+              {/* Month Filter */}
+              <div className="flex items-center gap-1">
+                <span className="text-gray-400 font-medium">Month:</span>
+                <input
+                  type="month"
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(e.target.value)}
+                  className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+            </>
+          ) : (
+            /* Payment Method Filter for Payments Tab */
+            <select
+              value={paymentMethodFilter}
+              onChange={(e) => setPaymentMethodFilter(e.target.value)}
+              className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 uppercase"
+            >
+              <option value="">All Payment Methods</option>
+              <option value="cash">Cash</option>
+              <option value="online">Online</option>
+              <option value="card">Card</option>
+              <option value="upi">UPI</option>
+              <option value="netbanking">Net Banking</option>
+            </select>
+          )}
+
+          {/* Reset Filters Button */}
+          {isAnyFilterActive && (
+            <button
+              onClick={handleClearFilters}
+              className="flex items-center gap-1 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl font-bold hover:bg-rose-100 transition ml-auto"
+            >
+              <FaUndo className="text-xs" /> Clear Filters
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Content Table Views */}
@@ -360,10 +579,18 @@ const getRefId = (ref) => {
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : bills.length === 0 ? (
+          ) : filteredBills.length === 0 ? (
             <div className="text-center py-12">
               <FaMoneyBill className="text-gray-300 text-5xl mx-auto mb-3" />
               <p className="text-gray-500 font-medium">No bills found matching filters</p>
+              {isAnyFilterActive && (
+                <button
+                  onClick={handleClearFilters}
+                  className="mt-3 text-xs font-semibold text-primary-600 hover:underline"
+                >
+                  Reset all filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -381,7 +608,7 @@ const getRefId = (ref) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {bills.map((b) => (
+                  {filteredBills.map((b) => (
                     <tr key={b._id} className="hover:bg-gray-50 transition">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -430,10 +657,18 @@ const getRefId = (ref) => {
       ) : (
         /* Payment History Log Tab */
         <div className="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden">
-          {payments.length === 0 ? (
+          {filteredPayments.length === 0 ? (
             <div className="text-center py-12">
               <FaHistory className="text-gray-300 text-5xl mx-auto mb-3" />
-              <p className="text-gray-500 font-medium">No payment history recorded yet</p>
+              <p className="text-gray-500 font-medium">No payment history recorded matching filters</p>
+              {isAnyFilterActive && (
+                <button
+                  onClick={handleClearFilters}
+                  className="mt-3 text-xs font-semibold text-primary-600 hover:underline"
+                >
+                  Reset all filters
+                </button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -449,7 +684,7 @@ const getRefId = (ref) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {payments.map((p) => (
+                  {filteredPayments.map((p) => (
                     <tr key={p._id} className="hover:bg-gray-50 transition">
                       <td className="px-6 py-4 font-semibold text-gray-800">{p.resident?.name || "N/A"}</td>
                       <td className="px-6 py-4 font-medium text-gray-700">{p.flat?.flatNumber || "N/A"}</td>
@@ -608,21 +843,80 @@ const getRefId = (ref) => {
               <p className="text-xs text-gray-500 mt-0.5">Generate invoices automatically for all occupied society flats.</p>
             </div>
             <form onSubmit={handleBulkGenerate} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Society *</label>
-                <select
-                  value={bulkData.society}
-                  onChange={(e) => setBulkData({ ...bulkData, society: e.target.value })}
-                  className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">-- Select Society --</option>
-                  {societies.map((s) => (
-                    <option key={s._id} value={s._id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Society *</label>
+                  <select
+                    value={bulkData.society}
+                    onChange={(e) => setBulkData({ ...bulkData, society: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    {societies.map((s) => (
+                      <option key={s._id} value={s._id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Bill Type *</label>
+                  <select
+                    value={bulkData.billType}
+                    onChange={(e) => setBulkData({ ...bulkData, billType: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="parking">Parking Charge</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="water">Water Bill</option>
+                    <option value="electricity">Electricity</option>
+                  </select>
+                </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Flat BHK Type *</label>
+                  <select
+                    value={bulkData.bhkType}
+                    onChange={(e) => setBulkData({ ...bulkData, bhkType: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                  >
+                    <option value="all">All BHK Types</option>
+                    <option value="1BHK">1BHK</option>
+                    <option value="2BHK">2BHK</option>
+                    <option value="3BHK">3BHK</option>
+                    <option value="4BHK">4BHK</option>
+                    <option value="Penthouse">Penthouse</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Vehicle / Parking Filter *</label>
+                  <select
+                    value={bulkData.vehicleFilter}
+                    onChange={(e) => setBulkData({ ...bulkData, vehicleFilter: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                  >
+                    <option value="all">All Occupied Flats</option>
+                    <option value="four_wheeler">🚗 4-Wheelers / Cars Only</option>
+                    <option value="two_wheeler">🏍️ 2-Wheelers / Bikes Only</option>
+                    <option value="ev_only">⚡ EV Charging (Cars & Bikes)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Amount per Resident (₹) *</label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  placeholder="e.g. 1000 for EV, 500 for Bike"
+                  value={bulkData.amount}
+                  onChange={(e) => setBulkData({ ...bulkData, amount: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 font-semibold text-primary-700"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Billing Month *</label>
@@ -652,7 +946,7 @@ const getRefId = (ref) => {
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => { setShowBulkModal(false); setBulkData({ society: "", month: "", billType: "maintenance", dueDate: "" }); }}
+                  onClick={() => { setShowBulkModal(false); setBulkData({ society: "", month: "", billType: "parking", amount: "", vehicleFilter: "all", dueDate: "" }); }}
                   className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
                 >
                   Cancel
@@ -662,7 +956,7 @@ const getRefId = (ref) => {
                   disabled={submitting}
                   className="flex-1 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {submitting ? "Generating..." : "Generate All Bills"}
+                  {submitting ? "Generating..." : "Generate Bills"}
                 </button>
               </div>
             </form>
