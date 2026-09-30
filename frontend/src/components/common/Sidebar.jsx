@@ -90,7 +90,12 @@ const Sidebar = ({ isOpen, onClose }) => {
       ? staffLinks
       : residentLinks;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await API.post("/auth/logout");
+    } catch (err) {
+      console.error("Logout API call error:", err);
+    }
     dispatch(logout());
     toast.success("Logged out successfully");
     navigate("/login");

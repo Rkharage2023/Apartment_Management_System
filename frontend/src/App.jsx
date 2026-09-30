@@ -1,8 +1,11 @@
-import { Routes, Route, Navigate } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useEffect } from "react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
+import { setUserFromStorage } from "./features/auth/authSlice";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import PrivateRoute from "./components/common/PrivateRoute";
+import PublicOnlyRoute from "./components/common/PublicOnlyRoute";
 import NotFound from "./pages/NotFound";
 import AIChatBubble from "./components/common/AIChatBubble";
 
@@ -41,15 +44,47 @@ const RootRedirect = () => {
 };
 
 function App() {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+
+  // Enforce single active user per browser: Sync sessions across all open tabs in real-time
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === "user") {
+        try {
+          const updatedUser = e.newValue ? JSON.parse(e.newValue) : null;
+          dispatch(setUserFromStorage(updatedUser));
+          if (updatedUser) {
+            if (updatedUser.role === "admin" || updatedUser.role === "security" || updatedUser.role === "staff") {
+              navigate("/admin", { replace: true });
+            } else if (updatedUser.role === "resident") {
+              navigate("/resident", { replace: true });
+            }
+          } else {
+            navigate("/login", { replace: true });
+          }
+        } catch {
+          dispatch(setUserFromStorage(null));
+          navigate("/login", { replace: true });
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [dispatch, navigate]);
+
   return (
     <>
       <Routes>
         {/* Root → smart redirect */}
         <Route path="/" element={<RootRedirect />} />
 
-        {/* Public Routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        {/* Public Routes — ONLY accessible when NOT logged in */}
+        <Route element={<PublicOnlyRoute />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+        </Route>
 
         {/* Shared Management Base Route (Admin, Security, Staff) */}
         <Route path="/admin" element={<PrivateRoute allowedRoles={["admin", "security", "staff"]} />}>

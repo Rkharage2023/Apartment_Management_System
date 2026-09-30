@@ -1,6 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import User from "../models/User.js";
 import protect from "../middleware/authMiddleware.js";
 
@@ -61,7 +62,7 @@ router.post("/register", async (req, res) => {
 
 // ─────────────────────────────────────────
 // @route   POST /api/v1/auth/login
-// @desc    Login user
+// @desc    Login user (blocks 2nd concurrent login if account active on another browser)
 // @access  Public
 // ─────────────────────────────────────────
 router.post("/login", async (req, res) => {
@@ -87,10 +88,31 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    // Generate token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    // Check if account is currently active on another browser / device (within 15 mins)
+    const activeWindowMins = 15;
+    const diffMins = user.lastActive
+      ? (new Date() - new Date(user.lastActive)) / 60000
+      : 999;
+
+    if (user.isLoggedIn && diffMins < activeWindowMins) {
+      return res.status(400).json({
+        message: `This account is already logged in on another browser or device. Please log out from the active session first.`,
+      });
+    }
+
+    // Create new active session
+    const sessionToken = crypto.randomUUID();
+    user.isLoggedIn = true;
+    user.lastActive = new Date();
+    user.sessionToken = sessionToken;
+    await user.save({ validateBeforeSave: false });
+
+    // Generate token containing sessionToken
+    const token = jwt.sign(
+      { id: user._id, sessionToken },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     res.json({
       _id: user._id,
@@ -99,6 +121,25 @@ router.post("/login", async (req, res) => {
       role: user.role,
       token,
     });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─────────────────────────────────────────
+// @route   POST /api/v1/auth/logout
+// @desc    Logout user and clear active session
+// @access  Private
+// ─────────────────────────────────────────
+router.post("/logout", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (user) {
+      user.isLoggedIn = false;
+      user.sessionToken = "";
+      await user.save({ validateBeforeSave: false });
+    }
+    res.json({ message: "Logged out successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

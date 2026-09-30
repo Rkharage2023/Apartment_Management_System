@@ -14,6 +14,23 @@ const protect = async (req, res, next) => {
         return res.status(401).json({ message: "User no longer exists" });
       }
 
+      // Check session validity
+      if (
+        decoded.sessionToken &&
+        req.user.sessionToken &&
+        decoded.sessionToken !== req.user.sessionToken
+      ) {
+        return res.status(401).json({
+          message:
+            "Your session has expired because your account was logged in from another device.",
+        });
+      }
+
+      // Touch lastActive timestamp silently
+      req.user.lastActive = new Date();
+      req.user.isLoggedIn = true;
+      await req.user.save({ validateBeforeSave: false });
+
       return next();
     } catch (error) {
       return res.status(401).json({ message: "Not authorized, token failed" });
